@@ -6,6 +6,7 @@ plugins {
     kotlin("jvm") version "2.0.10"
     id("org.jetbrains.dokka") version "1.9.20"
     `maven-publish`
+    id("org.jreleaser") version "1.13.1"
 }
 
 description = "SLF4J API extensions for Kotlin"
@@ -110,5 +111,48 @@ publishing {
         maven {
             setUrl(layout.buildDirectory.dir("publish"))
         }
+    }
+}
+
+jreleaser {
+    deploy {
+        setActive("RELEASE")
+        maven {
+            setActive("RELEASE")
+            pomchecker {
+                version = "1.11.0"
+                failOnWarning = true
+                failOnError = true
+            }
+            mavenCentral {
+                create("centralPortal") {
+                    setActive("RELEASE")
+                    url = "https://central.sonatype.com/api/v1/publisher"
+                    stagingRepository(layout.buildDirectory.dir("publish").get().toString())
+                    retryDelay = 5
+                    maxRetries = 600
+                }
+            }
+        }
+    }
+    release {
+        github {
+            enabled = true
+            repoOwner = "HarryJhin"
+            host = "github.com"
+            overwrite = false
+            update {
+                enabled = false
+            }
+            commitAuthor {
+                name = "주진현"
+                email = "joojinhyun00@gmail.com"
+            }
+        }
+    }
+    signing {
+        setActive("RELEASE")
+        armored = true
+        verify = true
     }
 }
