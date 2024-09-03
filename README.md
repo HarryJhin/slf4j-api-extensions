@@ -1,4 +1,5 @@
 [![Build](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/build.yml/badge.svg)](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/build.yml)
+[![Deploy to GitHub Pages](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/static.yml/badge.svg)](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/static.yml)
 
 # Kotlin 사용자를 위한 SLF4J 확장 라이브러리
 
