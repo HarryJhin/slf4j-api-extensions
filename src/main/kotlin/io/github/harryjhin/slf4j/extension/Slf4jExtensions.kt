@@ -7,6 +7,7 @@ import io.github.harryjhin.slf4j.extension.Slf4jKotlinExtensionConfiguration.log
  *
  * @param message the message string to be logged
  * @since 1.0.0
+ * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.trace
  */
 fun <T : Any> T.trace(
     message: () -> String,
@@ -24,6 +25,7 @@ fun <T : Any> T.trace(
  * @param throwable the exception (throwable) to log
  * @param message the message accompanying the exception
  * @since 1.0.0
+ * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.traceWithException
  */
 fun <T : Any> T.trace(
     throwable: Throwable,
@@ -41,6 +43,7 @@ fun <T : Any> T.trace(
  *
  * @param message the message string to be logged
  * @since 1.0.0
+ * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.debug
  */
 fun <T : Any> T.debug(
     message: () -> String,
@@ -58,6 +61,7 @@ fun <T : Any> T.debug(
  * @param throwable the exception (throwable) to log
  * @param message the message accompanying the exception
  * @since 1.0.0
+ * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.debugWithException
  */
 fun <T : Any> T.debug(
     throwable: Throwable,
@@ -75,6 +79,7 @@ fun <T : Any> T.debug(
  *
  * @param message the message string to be logged
  * @since 1.0.0
+ * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.info
  */
 fun <T : Any> T.info(
     message: () -> String,
@@ -92,6 +97,7 @@ fun <T : Any> T.info(
  * @param throwable the exception (throwable) to log
  * @param message the message accompanying the exception
  * @since 1.0.0
+ * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.infoWithException
  */
 fun <T : Any> T.info(
     throwable: Throwable,
@@ -109,6 +115,7 @@ fun <T : Any> T.info(
  *
  * @param message the message string to be logged
  * @since 1.0.0
+ * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.warn
  */
 fun <T : Any> T.warn(
     message: () -> String,
@@ -126,6 +133,7 @@ fun <T : Any> T.warn(
  * @param throwable the exception (throwable) to log
  * @param message the message accompanying the exception
  * @since 1.0.0
+ * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.warnWithException
  */
 fun <T : Any> T.warn(
     throwable: Throwable,
@@ -143,6 +151,7 @@ fun <T : Any> T.warn(
  *
  * @param message the message string to be logged
  * @since 1.0.0
+ * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.error
  */
 fun <T : Any> T.error(
     message: () -> String,
@@ -160,6 +169,7 @@ fun <T : Any> T.error(
  * @param throwable the exception (throwable) to log
  * @param message the message accompanying the exception
  * @since 1.0.0
+ * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.errorWithException
  */
 fun <T : Any> T.error(
     throwable: Throwable,
