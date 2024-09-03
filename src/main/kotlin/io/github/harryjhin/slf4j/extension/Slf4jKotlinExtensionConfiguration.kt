@@ -5,7 +5,7 @@ import org.slf4j.LoggerFactory
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 
-object Slf4jKotlinExtensionConfiguration {
+internal object Slf4jKotlinExtensionConfiguration {
 
     private val _logger: Logger = LoggerFactory.getLogger(Slf4jKotlinExtensionConfiguration::class.java)
 
@@ -23,7 +23,7 @@ object Slf4jKotlinExtensionConfiguration {
     private val isFull: Boolean
         get() = LOGGER_CACHE.size >= MAX_CACHE_SIZE
 
-    internal val <T : Any> T.logger: Logger
+    val <T : Any> T.logger: Logger
         get() = LOGGER_CACHE.getOrPut(this::class.java.name) { createLogger() }
 
     private fun <T : Any> T.createLogger(): Logger {
