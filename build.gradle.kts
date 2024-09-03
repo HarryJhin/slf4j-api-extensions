@@ -5,9 +5,10 @@ import java.net.URL
 plugins {
     kotlin("jvm") version "2.0.10"
     id("org.jetbrains.dokka") version "1.9.20"
+    `maven-publish`
 }
 
-description = "Kotlin을 위한 java.time.* 확장 함수 라이브러리"
+description = "SLF4J API extensions for Kotlin"
 group = "io.github.harryjhin"
 version = "1.0.0"
 
@@ -71,4 +72,43 @@ tasks.register<Jar>("dokkaJavadocJar") {
 
 tasks.jar {
     dependsOn(tasks.named("dokkaJavadocJar"))
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            from(components["java"])
+
+            pom {
+                name.set(project.name)
+                description.set(project.description)
+                url.set("https://github.com/HarryJhin/slf4j-api-extensions")
+                inceptionYear.set("2024")
+                licenses {
+                    license {
+                        name.set("MIT License")
+                        url.set("https://opensource.org/licenses/MIT")
+                    }
+                }
+                developers {
+                    developer {
+                        id.set("HarryJhin")
+                        name.set("주진현")
+                        email.set("joojinhyun00@gmail.com")
+                    }
+                }
+                scm {
+                    connection.set("scm:git://github.com/HarryJhin/slf4j-api-extensions.git")
+                    developerConnection.set("scm:git:ssh://github.com/HarryJhin/slf4j-api-extensions.git")
+                    url.set("https://github.com/HarryJhin/slf4j-api-extensions/tree/master")
+                }
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            setUrl(layout.buildDirectory.dir("publish"))
+        }
+    }
 }
