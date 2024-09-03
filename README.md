@@ -1,5 +1,10 @@
 [![Build](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/build.yml/badge.svg)](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/build.yml)
 [![Deploy to GitHub Pages](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/static.yml/badge.svg)](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/static.yml)
+[![Publish to Sonatype](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/publish.yml/badge.svg)](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/publish.yml)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.harryjhin/slf4j-api-extensions.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.harryjhin/slf4j-api-extensions)
+[![Kotlin](https://img.shields.io/badge/kotlin-2.0.10-blue.svg?logo=kotlin)](http://kotlinlang.org)
+[![KDoc link](https://img.shields.io/badge/API_reference-KDoc-blue)](https://harryjhin.github.io/slf4j-api-extensions/)
+[![License](https://img.shields.io/github/license/HarryJhin/slf4j-api-extensions)](https://opensource.org/licenses/MIT)
 
 # Kotlin 사용자를 위한 SLF4J 확장 라이브러리
 
