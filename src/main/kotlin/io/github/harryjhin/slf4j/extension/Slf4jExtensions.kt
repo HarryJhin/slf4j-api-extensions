@@ -5,7 +5,7 @@ import io.github.harryjhin.slf4j.extension.Slf4jKotlinExtensionConfiguration.log
 /**
  * Log a message at the TRACE level.
  *
- * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/io.github.harryjhin.slf4j.extension.trace.html).
+ * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/slf4j-api-extensions/io.github.harryjhin.slf4j.extensiontrace.html).
  *
  * @param message the message string to be logged
  * @since 1.0.0
@@ -24,7 +24,7 @@ fun <T : Any> T.trace(
 /**
  * Log an exception (throwable) at the TRACE level with an accompanying message.
  *
- * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/io.github.harryjhin.slf4j.extension.trace.html).
+ * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/slf4j-api-extensions/io.github.harryjhin.slf4j.extensiontrace.html).
  *
  * @param throwable the exception (throwable) to log
  * @param message the message accompanying the exception
@@ -45,7 +45,7 @@ fun <T : Any> T.trace(
 /**
  * Log a message at the DEBUG level.
  *
- * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/io.github.harryjhin.slf4j.extension.debug.html).
+ * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/slf4j-api-extensions/io.github.harryjhin.slf4j.extension/debug.html).
  *
  * @param message the message string to be logged
  * @since 1.0.0
@@ -64,7 +64,7 @@ fun <T : Any> T.debug(
 /**
  * Log an exception (throwable) at the DEBUG level with an accompanying message.
  *
- * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/io.github.harryjhin.slf4j.extension.debug.html).
+ * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/slf4j-api-extensions/io.github.harryjhin.slf4j.extensiondebug.html).
  *
  * @param throwable the exception (throwable) to log
  * @param message the message accompanying the exception
@@ -85,7 +85,7 @@ fun <T : Any> T.debug(
 /**
  * Log a message at the INFO level.
  *
- * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/io.github.harryjhin.slf4j.extension.info.html).
+ * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/slf4j-api-extensions/io.github.harryjhin.slf4j.extensioninfo.html).
  *
  * @param message the message string to be logged
  * @since 1.0.0
@@ -104,7 +104,7 @@ fun <T : Any> T.info(
 /**
  * Log an exception (throwable) at the INFO level with an accompanying message.
  *
- * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/io.github.harryjhin.slf4j.extension.info.html).
+ * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/slf4j-api-extensions/io.github.harryjhin.slf4j.extensioninfo.html).
  *
  * @param throwable the exception (throwable) to log
  * @param message the message accompanying the exception
@@ -125,7 +125,7 @@ fun <T : Any> T.info(
 /**
  * Log a message at the WARN level.
  *
- * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/io.github.harryjhin.slf4j.extension.warn.html).
+ * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/slf4j-api-extensions/io.github.harryjhin.slf4j.extensionwarn.html).
  *
  * @param message the message string to be logged
  * @since 1.0.0
@@ -144,7 +144,7 @@ fun <T : Any> T.warn(
 /**
  * Log an exception (throwable) at the WARN level with an accompanying message.
  *
- * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/io.github.harryjhin.slf4j.extension.warn.html).
+ * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/slf4j-api-extensions/io.github.harryjhin.slf4j.extensionwarn.html).
  *
  * @param throwable the exception (throwable) to log
  * @param message the message accompanying the exception
@@ -165,7 +165,7 @@ fun <T : Any> T.warn(
 /**
  * Log a message at the ERROR level.
  *
- * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/io.github.harryjhin.slf4j.extension.error.html).
+ * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/slf4j-api-extensions/io.github.harryjhin.slf4j.extensionerror.html).
  *
  * @param message the message string to be logged
  * @since 1.0.0
@@ -184,7 +184,7 @@ fun <T : Any> T.error(
 /**
  * Log an exception (throwable) at the ERROR level with an accompanying message.
  *
- * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/io.github.harryjhin.slf4j.extension.error.html).
+ * For more information, see [Documentation](https://harryjhin.github.io/slf4j-api-extensions/slf4j-api-extensions/io.github.harryjhin.slf4j.extensionerror.html).
  *
  * @param throwable the exception (throwable) to log
  * @param message the message accompanying the exception
