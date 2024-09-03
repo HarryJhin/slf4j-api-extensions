@@ -18,6 +18,8 @@ java {
         languageVersion = JavaLanguageVersion.of(17)
         vendor = JvmVendorSpec.ADOPTIUM
     }
+    withJavadocJar()
+    withSourcesJar()
 }
 
 repositories {
