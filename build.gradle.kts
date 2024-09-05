@@ -1,6 +1,5 @@
 import org.jetbrains.dokka.DokkaConfiguration
 import org.jetbrains.dokka.gradle.DokkaTask
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.net.URL
 
 plugins {
@@ -12,24 +11,15 @@ plugins {
 
 description = "SLF4J API extensions for Kotlin"
 group = "io.github.harryjhin"
-version = "1.0.1"
+version = "1.0.2"
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(8)
         vendor = JvmVendorSpec.ADOPTIUM
     }
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
     withJavadocJar()
     withSourcesJar()
-}
-
-kotlin {
-    jvmToolchain(8)
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_1_8)
-    }
 }
 
 repositories {
