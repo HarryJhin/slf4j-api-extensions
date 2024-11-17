@@ -11,7 +11,7 @@ plugins {
 
 description = "SLF4J API extensions for Kotlin"
 group = "io.github.harryjhin"
-version = "1.0.2"
+version = "1.0.3"
 
 java {
     toolchain {

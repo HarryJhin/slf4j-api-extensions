@@ -11,7 +11,7 @@ import io.github.harryjhin.slf4j.extension.Slf4jKotlinExtensionConfiguration.log
  * @since 1.0.0
  * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.trace
  */
-fun <T : Any> T.trace(
+inline fun <T : Any> T.trace(
     message: () -> String,
 ) {
     with(logger) {
@@ -31,7 +31,7 @@ fun <T : Any> T.trace(
  * @since 1.0.0
  * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.traceWithException
  */
-fun <T : Any> T.trace(
+inline fun <T : Any> T.trace(
     throwable: Throwable,
     message: () -> String,
 ) {
@@ -51,7 +51,7 @@ fun <T : Any> T.trace(
  * @since 1.0.0
  * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.debug
  */
-fun <T : Any> T.debug(
+inline fun <T : Any> T.debug(
     message: () -> String,
 ) {
     with(logger) {
@@ -71,7 +71,7 @@ fun <T : Any> T.debug(
  * @since 1.0.0
  * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.debugWithException
  */
-fun <T : Any> T.debug(
+inline fun <T : Any> T.debug(
     throwable: Throwable,
     message: () -> String,
 ) {
@@ -91,7 +91,7 @@ fun <T : Any> T.debug(
  * @since 1.0.0
  * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.info
  */
-fun <T : Any> T.info(
+inline fun <T : Any> T.info(
     message: () -> String,
 ) {
     with(logger) {
@@ -111,7 +111,7 @@ fun <T : Any> T.info(
  * @since 1.0.0
  * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.infoWithException
  */
-fun <T : Any> T.info(
+inline fun <T : Any> T.info(
     throwable: Throwable,
     message: () -> String,
 ) {
@@ -131,7 +131,7 @@ fun <T : Any> T.info(
  * @since 1.0.0
  * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.warn
  */
-fun <T : Any> T.warn(
+inline fun <T : Any> T.warn(
     message: () -> String,
 ) {
     with(logger) {
@@ -151,7 +151,7 @@ fun <T : Any> T.warn(
  * @since 1.0.0
  * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.warnWithException
  */
-fun <T : Any> T.warn(
+inline fun <T : Any> T.warn(
     throwable: Throwable,
     message: () -> String,
 ) {
@@ -171,7 +171,7 @@ fun <T : Any> T.warn(
  * @since 1.0.0
  * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.error
  */
-fun <T : Any> T.error(
+inline fun <T : Any> T.error(
     message: () -> String,
 ) {
     with(logger) {
@@ -191,7 +191,7 @@ fun <T : Any> T.error(
  * @since 1.0.0
  * @sample io.github.harryjhin.slf4j.extension.Slf4jExtensionsTest.errorWithException
  */
-fun <T : Any> T.error(
+inline fun <T : Any> T.error(
     throwable: Throwable,
     message: () -> String,
 ) {

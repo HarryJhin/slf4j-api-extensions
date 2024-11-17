@@ -5,7 +5,7 @@ import org.slf4j.LoggerFactory
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 
-internal object Slf4jKotlinExtensionConfiguration {
+object Slf4jKotlinExtensionConfiguration {
 
     private val _logger: Logger = LoggerFactory.getLogger(Slf4jKotlinExtensionConfiguration::class.java)
 
