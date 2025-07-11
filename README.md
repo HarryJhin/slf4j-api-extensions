@@ -21,7 +21,7 @@
 
 ```kotlin
 dependencies {
-    implementation("io.github.debop:slf4j-api-extensions:$version")
+    implementation("io.github.harryjhin:slf4j-api-extensions:$version")
 }
 ```
 
