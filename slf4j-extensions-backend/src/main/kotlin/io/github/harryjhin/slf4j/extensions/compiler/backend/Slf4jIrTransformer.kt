@@ -8,6 +8,7 @@ import org.jetbrains.kotlin.ir.builders.irBlockBody
 import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irExprBody
 import org.jetbrains.kotlin.ir.builders.irGet
+import org.jetbrains.kotlin.ir.builders.irGetField
 import org.jetbrains.kotlin.ir.builders.irIfThen
 import org.jetbrains.kotlin.ir.builders.irString
 import org.jetbrains.kotlin.ir.builders.irTemporary
@@ -20,9 +21,11 @@ import org.jetbrains.kotlin.ir.declarations.IrPackageFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.ObsoleteDescriptorBasedAPI
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
+import org.jetbrains.kotlin.descriptors.CallableMemberDescriptor
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.name.CallableId
 import org.jetbrains.kotlin.name.ClassId
@@ -69,15 +72,49 @@ class Slf4jIrTransformer(
         }
     }
 
-    override fun visitProperty(declaration: IrProperty) {
+    @OptIn(ObsoleteDescriptorBasedAPI::class)
+    private fun isPluginGenerated(declaration: IrDeclaration): Boolean {
+        // K2: FIR-generated declarations have GeneratedByPlugin origin
         val origin = declaration.origin
-        if (origin !is IrDeclarationOrigin.GeneratedByPlugin ||
-            origin.pluginKey != Slf4jExtensionsPluginKey
-        ) return
-        if (declaration.name.asString() != propertyName) return
+        if (origin is IrDeclarationOrigin.GeneratedByPlugin &&
+            origin.pluginKey == Slf4jExtensionsPluginKey
+        ) return true
+        // K1: synthetic descriptors lowered with DEFINED origin, check descriptor kind
+        if (!context.afterK2) {
+            val descriptor = declaration.descriptor as? CallableMemberDescriptor
+            if (descriptor?.kind == CallableMemberDescriptor.Kind.SYNTHESIZED) return true
+        }
+        return false
+    }
 
-        val backingField = declaration.backingField ?: return
+    override fun visitProperty(declaration: IrProperty) {
+        if (!isPluginGenerated(declaration)) return
+        if (declaration.name.asString() != propertyName) return
+        // Note: K2 has a stub initializer from withGeneratedDefaultInitializer(),
+        // K1 has no initializer. Both need to be (re)filled.
+
         val parentClass = declaration.parent as? IrClass ?: return
+
+        // K1: backing field may not exist, create it
+        if (declaration.backingField == null) {
+            val loggerType = declaration.getter?.returnType ?: return
+            declaration.backingField = context.irFactory.createField(
+                startOffset = -1,
+                endOffset = -1,
+                origin = IrDeclarationOrigin.PROPERTY_BACKING_FIELD,
+                name = declaration.name,
+                visibility = org.jetbrains.kotlin.descriptors.DescriptorVisibilities.PRIVATE,
+                symbol = org.jetbrains.kotlin.ir.symbols.impl.IrFieldSymbolImpl(),
+                type = loggerType,
+                isFinal = true,
+                isStatic = false,
+                isExternal = false,
+            ).also {
+                it.parent = parentClass
+                it.correspondingPropertySymbol = declaration.symbol
+            }
+        }
+        val backingField = declaration.backingField ?: return
 
         val builder = DeclarationIrBuilder(context, backingField.symbol)
         val className = buildClassName(parentClass)
@@ -90,16 +127,29 @@ class Slf4jIrTransformer(
                 call.arguments[paramIndex] = builder.irString(className)
             }
         )
+
+        // K1: getter body must be generated explicitly (K2 FIR→IR does this automatically)
+        val getter = declaration.getter
+        if (getter != null && getter.body == null) {
+            val getterBuilder = DeclarationIrBuilder(context, getter.symbol)
+            val getterDispatch = getter.dispatchReceiverParameter
+            if (getterDispatch != null) {
+                getter.body = getterBuilder.irExprBody(
+                    getterBuilder.irGetField(
+                        getterBuilder.irGet(getterDispatch),
+                        backingField,
+                    )
+                )
+            }
+        }
     }
 
     override fun visitSimpleFunction(declaration: IrSimpleFunction) {
-        val origin = declaration.origin
-        if (origin !is IrDeclarationOrigin.GeneratedByPlugin ||
-            origin.pluginKey != Slf4jExtensionsPluginKey
-        ) return
+        if (!isPluginGenerated(declaration)) return
 
         val levelName = declaration.name.asString()
         if (levelName !in LOG_LEVELS) return
+        if (declaration.body != null) return // already has body
 
         val regularParams = declaration.parameters.filter {
             it.kind == IrParameterKind.Regular

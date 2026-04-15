@@ -4,7 +4,7 @@ import org.jetbrains.kotlin.test.TestMetadata
 import org.junit.jupiter.api.Test
 
 @TestMetadata("slf4j-extensions-cli/testData/box")
-class K2BoxTestGenerated : AbstractK2BoxTest() {
+class K1BoxTestGenerated : AbstractK1BoxTest() {
 
     @Test
     @TestMetadata("simpleTrace.kt")

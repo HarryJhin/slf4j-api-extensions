@@ -11,13 +11,13 @@ import org.jetbrains.kotlin.descriptors.SimpleFunctionDescriptor
 import org.jetbrains.kotlin.descriptors.SourceElement
 import org.jetbrains.kotlin.descriptors.annotations.Annotations
 import org.jetbrains.kotlin.descriptors.impl.PropertyDescriptorImpl
+import org.jetbrains.kotlin.descriptors.impl.PropertyGetterDescriptorImpl
 import org.jetbrains.kotlin.descriptors.impl.SimpleFunctionDescriptorImpl
 import org.jetbrains.kotlin.descriptors.impl.ValueParameterDescriptorImpl
 import org.jetbrains.kotlin.incremental.components.NoLookupLocation
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.DescriptorFactory
 import org.jetbrains.kotlin.resolve.descriptorUtil.builtIns
 import org.jetbrains.kotlin.resolve.descriptorUtil.module
 import org.jetbrains.kotlin.resolve.extensions.SyntheticResolveExtension
@@ -56,6 +56,7 @@ class Slf4jSyntheticResolveExtension(
     ) {
         if (name != propertyNameId) return
         if (!shouldGenerateFor(thisDescriptor)) return
+        if (result.isNotEmpty()) return // class already has a property with this name
 
         val loggerDescriptor = thisDescriptor.module
             .getPackage(FqName("org.slf4j")).memberScope
@@ -73,7 +74,7 @@ class Slf4jSyntheticResolveExtension(
             false,
             name,
             CallableMemberDescriptor.Kind.SYNTHESIZED,
-            SourceElement.NO_SOURCE,
+            thisDescriptor.source,
             false,
             false,
             false,
@@ -89,10 +90,13 @@ class Slf4jSyntheticResolveExtension(
             null,
         )
 
-        property.initialize(
-            DescriptorFactory.createDefaultGetter(property, Annotations.EMPTY),
-            null,
+        val getter = PropertyGetterDescriptorImpl(
+            property, Annotations.EMPTY, Modality.FINAL, DescriptorVisibilities.PRIVATE,
+            false, false, false,
+            CallableMemberDescriptor.Kind.SYNTHESIZED, null, thisDescriptor.source,
         )
+        getter.initialize(loggerType)
+        property.initialize(getter, null)
 
         result.add(property)
     }
@@ -123,7 +127,7 @@ class Slf4jSyntheticResolveExtension(
             Annotations.EMPTY,
             name,
             CallableMemberDescriptor.Kind.SYNTHESIZED,
-            SourceElement.NO_SOURCE,
+            thisDescriptor.source,
         )
         simpleFunc.initialize(
             null,
@@ -134,13 +138,14 @@ class Slf4jSyntheticResolveExtension(
                 ValueParameterDescriptorImpl(
                     simpleFunc, null, 0, Annotations.EMPTY,
                     Name.identifier("message"), function0OfString,
-                    false, false, false, null, SourceElement.NO_SOURCE,
+                    false, false, false, null, thisDescriptor.source,
                 ),
             ),
             unitType,
             Modality.FINAL,
             DescriptorVisibilities.PRIVATE,
         )
+        simpleFunc.setReturnType(unitType)
         result.add(simpleFunc)
 
         // fun trace(throwable: Throwable, message: () -> String)
@@ -149,7 +154,7 @@ class Slf4jSyntheticResolveExtension(
             Annotations.EMPTY,
             name,
             CallableMemberDescriptor.Kind.SYNTHESIZED,
-            SourceElement.NO_SOURCE,
+            thisDescriptor.source,
         )
         throwableFunc.initialize(
             null,
@@ -160,18 +165,19 @@ class Slf4jSyntheticResolveExtension(
                 ValueParameterDescriptorImpl(
                     throwableFunc, null, 0, Annotations.EMPTY,
                     Name.identifier("throwable"), throwableType,
-                    false, false, false, null, SourceElement.NO_SOURCE,
+                    false, false, false, null, thisDescriptor.source,
                 ),
                 ValueParameterDescriptorImpl(
                     throwableFunc, null, 1, Annotations.EMPTY,
                     Name.identifier("message"), function0OfString,
-                    false, false, false, null, SourceElement.NO_SOURCE,
+                    false, false, false, null, thisDescriptor.source,
                 ),
             ),
             unitType,
             Modality.FINAL,
             DescriptorVisibilities.PRIVATE,
         )
+        throwableFunc.setReturnType(unitType)
         result.add(throwableFunc)
     }
 

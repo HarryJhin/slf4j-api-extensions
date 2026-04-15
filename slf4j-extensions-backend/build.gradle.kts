@@ -6,6 +6,7 @@ kotlin {
     compilerOptions {
         optIn.add("org.jetbrains.kotlin.compiler.plugin.ExperimentalCompilerApi")
         optIn.add("org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI")
+        optIn.add("org.jetbrains.kotlin.ir.ObsoleteDescriptorBasedAPI")
     }
 }
 
