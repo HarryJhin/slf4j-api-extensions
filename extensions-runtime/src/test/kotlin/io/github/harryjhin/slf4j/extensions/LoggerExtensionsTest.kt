@@ -69,4 +69,85 @@ class LoggerExtensionsTest {
         assertFalse(evaluated)
         assertTrue(logger.loggingEvents.isEmpty())
     }
+
+    @Test
+    fun `info logs message when enabled`() {
+        logger.info { "info message" }
+        val events = logger.loggingEvents
+        assertEquals(1, events.size)
+        assertEquals(Level.INFO, events[0].level)
+        assertEquals("info message", events[0].message)
+    }
+
+    @Test
+    fun `info with throwable logs message and exception`() {
+        val exception = RuntimeException("boom")
+        logger.info(exception) { "info error" }
+        val events = logger.loggingEvents
+        assertEquals(1, events.size)
+        assertEquals("info error", events[0].message)
+        assertEquals(exception, events[0].throwable.orElse(null))
+    }
+
+    @Test
+    fun `info does not evaluate lambda when disabled`() {
+        logger.setEnabledLevels(Level.ERROR)
+        var evaluated = false
+        logger.info { evaluated = true; "should not appear" }
+        assertFalse(evaluated)
+    }
+
+    @Test
+    fun `warn logs message when enabled`() {
+        logger.warn { "warn message" }
+        val events = logger.loggingEvents
+        assertEquals(1, events.size)
+        assertEquals(Level.WARN, events[0].level)
+        assertEquals("warn message", events[0].message)
+    }
+
+    @Test
+    fun `warn with throwable logs message and exception`() {
+        val exception = RuntimeException("boom")
+        logger.warn(exception) { "warn error" }
+        val events = logger.loggingEvents
+        assertEquals(1, events.size)
+        assertEquals("warn error", events[0].message)
+        assertEquals(exception, events[0].throwable.orElse(null))
+    }
+
+    @Test
+    fun `warn does not evaluate lambda when disabled`() {
+        logger.setEnabledLevels(Level.ERROR)
+        var evaluated = false
+        logger.warn { evaluated = true; "should not appear" }
+        assertFalse(evaluated)
+    }
+
+    @Test
+    fun `error logs message when enabled`() {
+        logger.error { "error message" }
+        val events = logger.loggingEvents
+        assertEquals(1, events.size)
+        assertEquals(Level.ERROR, events[0].level)
+        assertEquals("error message", events[0].message)
+    }
+
+    @Test
+    fun `error with throwable logs message and exception`() {
+        val exception = RuntimeException("boom")
+        logger.error(exception) { "error message" }
+        val events = logger.loggingEvents
+        assertEquals(1, events.size)
+        assertEquals("error message", events[0].message)
+        assertEquals(exception, events[0].throwable.orElse(null))
+    }
+
+    @Test
+    fun `error does not evaluate lambda when disabled`() {
+        logger.setEnabledLevels()
+        var evaluated = false
+        logger.error { evaluated = true; "should not appear" }
+        assertFalse(evaluated)
+    }
 }
