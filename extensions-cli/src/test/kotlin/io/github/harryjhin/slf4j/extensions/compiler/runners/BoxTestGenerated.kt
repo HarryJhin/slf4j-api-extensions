@@ -41,4 +41,28 @@ class BoxTestGenerated : AbstractBoxTest() {
     fun testObjectClass() {
         runTest("extensions-cli/testData/box/objectClass.kt")
     }
+
+    @Test
+    @TestMetadata("skipInterface.kt")
+    fun testSkipInterface() {
+        runTest("extensions-cli/testData/box/skipInterface.kt")
+    }
+
+    @Test
+    @TestMetadata("skipAnnotationClass.kt")
+    fun testSkipAnnotationClass() {
+        runTest("extensions-cli/testData/box/skipAnnotationClass.kt")
+    }
+
+    @Test
+    @TestMetadata("existingLogProperty.kt")
+    fun testExistingLogProperty() {
+        runTest("extensions-cli/testData/box/existingLogProperty.kt")
+    }
+
+    @Test
+    @TestMetadata("nestedClass.kt")
+    fun testNestedClass() {
+        runTest("extensions-cli/testData/box/nestedClass.kt")
+    }
 }
