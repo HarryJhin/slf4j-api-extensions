@@ -67,40 +67,29 @@ class Slf4jIrTransformer(
         val hasThrowable = regularParams.size == 2
         val parentClass = declaration.parent as? IrClass ?: return
 
-        println("SLF4J-PLUGIN: ${parentClass.name} declarations: ${parentClass.declarations.map { "${it::class.simpleName}(${(it as? IrDeclarationWithName)?.name})" }}")
-        val logGetter = findLogGetter(parentClass)
-        if (logGetter == null) { println("SLF4J-PLUGIN: logGetter not found for $propertyName in ${parentClass.name}"); return }
+        val logGetter = findLogGetter(parentClass) ?: return
 
         val isEnabledName = "is${levelName.replaceFirstChar { it.uppercase() }}Enabled"
-        val isEnabledCandidates = context.referenceFunctions(
+        val isEnabledSymbol = context.referenceFunctions(
             CallableId(loggerClassId, Name.identifier(isEnabledName))
-        )
-        println("SLF4J-PLUGIN: isEnabled($isEnabledName) candidates: ${isEnabledCandidates.size}")
-        val isEnabledSymbol = isEnabledCandidates.firstOrNull { symbol ->
+        ).firstOrNull { symbol ->
             symbol.signature?.toString()?.contains("Marker") != true
-        }
-        if (isEnabledSymbol == null) { println("SLF4J-PLUGIN: isEnabledSymbol not found"); return }
+        } ?: return
 
-        val logCandidates = context.referenceFunctions(
+        val logMethodSymbol = context.referenceFunctions(
             CallableId(loggerClassId, Name.identifier(levelName))
-        )
-        println("SLF4J-PLUGIN: log($levelName) candidates: ${logCandidates.size}, sigs: ${logCandidates.map { it.signature }}")
-        val logMethodSymbol = logCandidates.firstOrNull { symbol ->
+        ).firstOrNull { symbol ->
             val sig = symbol.signature?.toString() ?: ""
             if (hasThrowable) {
                 sig.contains("Throwable") && !sig.contains("Marker")
             } else {
                 !sig.contains("Throwable") && !sig.contains("Marker") && !sig.contains("Object")
             }
-        }
-        if (logMethodSymbol == null) { println("SLF4J-PLUGIN: logMethodSymbol not found for $levelName hasThrowable=$hasThrowable"); return }
+        } ?: return
 
-        val invokeCandidates = context.referenceFunctions(
+        val invokeSymbol = context.referenceFunctions(
             CallableId(ClassId(FqName("kotlin"), Name.identifier("Function0")), Name.identifier("invoke"))
-        )
-        println("SLF4J-PLUGIN: invoke candidates: ${invokeCandidates.size}")
-        val invokeSymbol = invokeCandidates.firstOrNull()
-        if (invokeSymbol == null) { println("SLF4J-PLUGIN: invokeSymbol not found"); return }
+        ).firstOrNull() ?: return
 
         val builder = DeclarationIrBuilder(context, declaration.symbol)
         val dispatchParam = declaration.dispatchReceiverParameter ?: return
