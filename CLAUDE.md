@@ -38,35 +38,26 @@ extensions-runtime/    # 사용자 런타임 (Logger/Marker/MDC 확장)
 
 ## Key Files
 
-- `extensions-k2/.../FirSlf4jDeclarationGenerator.kt` — FIR에서 log 프로퍼티 + 10개 함수 선언
-- `extensions-backend/.../Slf4jIrTransformer.kt` — IR에서 함수 body 채우기 (LoggerFactory.getLogger, isXxxEnabled 가드)
-- `extensions-cli/.../Slf4jExtensionsCompilerPluginRegistrar.kt` — K2 FIR + IR 확장 등록
-- `extensions-runtime/.../LoggerExtensions.kt` — inline fun Logger.trace/debug/info/warn/error
+- `extensions-k2/src/main/kotlin/io/github/harryjhin/slf4j/extensions/compiler/k2/FirSlf4jDeclarationGenerator.kt` — FIR에서 log 프로퍼티 + 10개 함수 선언
+- `extensions-backend/src/main/kotlin/io/github/harryjhin/slf4j/extensions/compiler/backend/Slf4jIrTransformer.kt` — IR에서 함수 body 채우기
+- `extensions-cli/src/main/kotlin/io/github/harryjhin/slf4j/extensions/compiler/cli/Slf4jExtensionsCompilerPluginRegistrar.kt` — K2 FIR + IR 확장 등록
+- `extensions-runtime/src/main/kotlin/io/github/harryjhin/slf4j/extensions/LoggerExtensions.kt` — inline fun Logger.trace/debug/info/warn/error
+
+## Environment
+
+- JDK 8+ (runtime target) — Adoptium toolchain 자동 다운로드 (foojay-resolver)
+- JDK 17+ (build) — Kotlin 2.3.20 컴파일러 실행에 필요
+- Gradle 8.8 (wrapper 포함)
 
 ## Kotlin 2.3.20 Compiler Plugin API
 
-### 필수 opt-in (build.gradle.kts)
-```kotlin
-kotlin {
-    compilerOptions {
-        optIn.add("org.jetbrains.kotlin.compiler.plugin.ExperimentalCompilerApi")
-        optIn.add("org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI")
-    }
-}
-```
+상세: `docs/superpowers/plans/2026-04-15-plan2-findings.md`
 
-### Deprecated API 대체 (2.3.20)
-- `putValueArgument(i, expr)` -> `call.arguments[param.indexInParameters] = expr`
-- `function.valueParameters` -> `function.parameters.filter { it.kind == IrParameterKind.Regular }`
-- `IrCallImpl(...)` 직접 생성 금지 -> `DeclarationIrBuilder.irCall(symbol)` 사용
-- `referenceFunctions(id)` -> `finderForBuiltins().findFunctions(id)` (외부 라이브러리용)
-- `IrClass.functions` extension 금지 -> `declarations.filterIsInstance<IrSimpleFunction>()`
-
-### IR 노드 생성 패턴 (JetBrains 템플릿)
-- `IrVisitorVoid` + `visitSimpleFunction`/`visitProperty` — origin이 `GeneratedByPlugin(PluginKey)`인 것만 처리
-- `irFactory.createBlockBody(-1, -1, statements)` — offset은 -1
-- `IrConstImpl.string(-1, -1, type, value)` — 상수 생성
-- `DeclarationIrBuilder(context, symbol)` — 빌더 DSL (`irCall`, `irGet`, `irBlockBody` 등)
+- 필수 opt-in: `ExperimentalCompilerApi`, `UnsafeDuringIrConstructionAPI` (build.gradle.kts에서 전역)
+- `@DeprecatedForRemovalCompilerApi` 달린 API는 `@OptIn`/`@Suppress` 불가 — 대체 API 사용 필수
+- IR 노드: `DeclarationIrBuilder` + 빌더 DSL 사용. 직접 Impl 생성자 호출 금지
+- 함수 탐색: `referenceFunctions` deprecated -> `finderForBuiltins().findFunctions()` 사용
+- 참고 템플릿: https://github.com/Kotlin/compiler-plugin-template
 
 ## Testing
 
@@ -83,6 +74,8 @@ kotlin {
 - `createMemberProperty`로 생성한 FIR 프로퍼티가 IR에 나타나지 않는 문제 조사 중 (현재 블로커)
 
 ## Specs & Plans
+
+> **Note:** `docs/`가 `.gitignore`에 있어 git 추적 안 됨. v2에서 .gitignore 수정 필요.
 
 - `docs/superpowers/specs/2026-04-15-slf4j-extensions-v2-design.md` — v2 설계 스펙
 - `docs/superpowers/plans/2026-04-15-plan1-foundation-runtime.md` — Plan 1 (완료)
