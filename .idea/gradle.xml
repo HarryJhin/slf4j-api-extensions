@@ -5,6 +5,18 @@
       <GradleProjectSettings>
         <option name="externalProjectPath" value="$PROJECT_DIR$" />
         <option name="gradleJvm" value="#JAVA_HOME" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/extensions-backend" />
+            <option value="$PROJECT_DIR$/extensions-cli" />
+            <option value="$PROJECT_DIR$/extensions-common" />
+            <option value="$PROJECT_DIR$/extensions-compiler" />
+            <option value="$PROJECT_DIR$/extensions-k1" />
+            <option value="$PROJECT_DIR$/extensions-k2" />
+            <option value="$PROJECT_DIR$/extensions-runtime" />
+          </set>
+        </option>
       </GradleProjectSettings>
     </option>
   </component>

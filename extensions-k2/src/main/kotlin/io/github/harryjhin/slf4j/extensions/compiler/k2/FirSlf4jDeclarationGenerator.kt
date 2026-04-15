@@ -15,8 +15,10 @@ import org.jetbrains.kotlin.fir.symbols.impl.FirClassSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirNamedFunctionSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirPropertySymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirRegularClassSymbol
+import org.jetbrains.kotlin.fir.symbols.impl.ConeClassLikeLookupTagImpl
+import org.jetbrains.kotlin.fir.types.ConeAttributes
 import org.jetbrains.kotlin.fir.types.ConeKotlinType
-import org.jetbrains.kotlin.fir.types.constructClassLikeType
+import org.jetbrains.kotlin.fir.types.impl.ConeClassLikeTypeImpl
 import org.jetbrains.kotlin.name.CallableId
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
@@ -48,6 +50,14 @@ class FirSlf4jDeclarationGenerator(
         context: MemberGenerationContext,
     ): Set<Name> {
         if (!shouldGenerateFor(classSymbol)) return emptySet()
+
+        // Skip if class already has a property with the target name
+        @OptIn(org.jetbrains.kotlin.fir.declarations.DirectDeclarationsAccess::class)
+        val hasExistingLog = classSymbol.declarationSymbols.any { decl ->
+            decl is FirPropertySymbol && decl.name == propertyNameId
+        }
+        if (hasExistingLog) return emptySet()
+
         return allCallableNames
     }
 
@@ -82,7 +92,7 @@ class FirSlf4jDeclarationGenerator(
         if (callableId.callableName !in functionNames) return emptyList()
         val owner = context?.owner ?: return emptyList()
 
-        val unitType = session.builtinTypes.unitType.type
+        val unitType = session.builtinTypes.unitType.coneType
         val stringType = resolveType(STRING_CLASS_ID) ?: return emptyList()
         val throwableType = resolveType(THROWABLE_CLASS_ID) ?: return emptyList()
         val function0OfString = createFunction0Type(stringType) ?: return emptyList()
@@ -145,7 +155,11 @@ class FirSlf4jDeclarationGenerator(
             ?.let { (it as? FirRegularClassSymbol)?.defaultType() }
     }
 
-    private fun createFunction0Type(returnType: ConeKotlinType): ConeKotlinType? {
-        return FUNCTION0_CLASS_ID.constructClassLikeType(arrayOf(returnType), isNullable = false)
+    private fun createFunction0Type(returnType: ConeKotlinType): ConeKotlinType {
+        return ConeClassLikeTypeImpl(
+            ConeClassLikeLookupTagImpl(FUNCTION0_CLASS_ID),
+            arrayOf(returnType),
+            isMarkedNullable = false,
+        )
     }
 }

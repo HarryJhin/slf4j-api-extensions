@@ -3,153 +3,158 @@ package io.github.harryjhin.slf4j.extensions.compiler.backend
 import io.github.harryjhin.slf4j.extensions.compiler.Slf4jExtensionsPluginKey
 import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
 import org.jetbrains.kotlin.backend.common.lower.DeclarationIrBuilder
-import org.jetbrains.kotlin.ir.IrStatement
-import org.jetbrains.kotlin.ir.builders.irBlockBody
-import org.jetbrains.kotlin.ir.builders.irCall
-import org.jetbrains.kotlin.ir.builders.irGet
-import org.jetbrains.kotlin.ir.builders.irIfThen
-import org.jetbrains.kotlin.ir.builders.irTemporary
-import org.jetbrains.kotlin.ir.declarations.IrClass
-import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
-import org.jetbrains.kotlin.ir.declarations.IrProperty
-import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
-import org.jetbrains.kotlin.ir.builders.irString
-import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.IrElement
+import org.jetbrains.kotlin.ir.builders.*
+import org.jetbrains.kotlin.ir.declarations.*
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
-import org.jetbrains.kotlin.ir.types.IrSimpleType
-import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
-import org.jetbrains.kotlin.ir.util.functions
-import org.jetbrains.kotlin.ir.util.properties
-import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
+import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
+import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
+import org.jetbrains.kotlin.name.CallableId
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 
 class Slf4jIrTransformer(
-    private val pluginContext: IrPluginContext,
+    private val context: IrPluginContext,
     private val propertyName: String,
-) : IrElementTransformerVoid() {
+) : IrVisitorVoid() {
 
-    private val pluginOrigin = IrDeclarationOrigin.GeneratedByPlugin(Slf4jExtensionsPluginKey)
+    private val loggerClassId = ClassId(FqName("org.slf4j"), Name.identifier("Logger"))
 
-    private val loggerClassSymbol: IrClassSymbol by lazy {
-        pluginContext.referenceClass(ClassId(FqName("org.slf4j"), Name.identifier("Logger")))
-            ?: error("Cannot find org.slf4j.Logger on classpath")
+    private val getLoggerSymbol: IrSimpleFunctionSymbol by lazy {
+        val candidates = context.referenceFunctions(
+            CallableId(ClassId(FqName("org.slf4j"), Name.identifier("LoggerFactory")), Name.identifier("getLogger"))
+        )
+        candidates.firstOrNull { symbol ->
+            symbol.signature?.toString()?.contains("String") == true
+        } ?: candidates.first()
     }
 
-    private val loggerFactoryGetLogger: IrSimpleFunctionSymbol by lazy {
-        val factoryClassId = ClassId(FqName("org.slf4j"), Name.identifier("LoggerFactory"))
-        val factoryClass = pluginContext.referenceClass(factoryClassId)
-            ?: error("Cannot find org.slf4j.LoggerFactory on classpath")
-        // Use getLogger(String) overload — avoids complex class reference IR generation
-        factoryClass.functions.first { func ->
-            func.owner.name.asString() == "getLogger" &&
-            func.owner.valueParameters.size == 1 &&
-            (func.owner.valueParameters[0].type as? IrSimpleType)?.classifier == pluginContext.irBuiltIns.stringClass
+    override fun visitElement(element: IrElement) {
+        when (element) {
+            is IrDeclaration, is IrFile, is IrModuleFragment -> element.acceptChildrenVoid(this)
+            else -> {}
         }
     }
 
-    override fun visitClass(declaration: IrClass): IrStatement {
-        declaration.declarations.toList().forEach { member ->
-            when (member) {
-                is IrProperty -> if (member.origin == pluginOrigin && member.name.asString() == propertyName) {
-                    fillPropertyInitializer(member, declaration)
-                }
-                is IrSimpleFunction -> if (member.origin == pluginOrigin && member.name.asString() in LOG_LEVELS) {
-                    fillFunctionBody(member, declaration)
-                }
-                else -> {}
+    override fun visitProperty(declaration: IrProperty) {
+        val origin = declaration.origin
+        if (origin !is IrDeclarationOrigin.GeneratedByPlugin || origin.pluginKey != Slf4jExtensionsPluginKey) return
+        if (declaration.name.asString() != propertyName) return
+
+        val backingField = declaration.backingField ?: return
+        val parentClass = declaration.parent as? IrClass ?: return
+
+        val builder = DeclarationIrBuilder(context, backingField.symbol)
+        val className = buildClassName(parentClass)
+
+        backingField.initializer = builder.irExprBody(
+            builder.irCall(getLoggerSymbol).also { call ->
+                val paramIndex = call.symbol.owner.parameters.indexOfFirst { it.kind == IrParameterKind.Regular }
+                call.arguments[paramIndex] = builder.irString(className)
             }
-        }
-        return super.visitClass(declaration)
-    }
-
-    private fun fillPropertyInitializer(property: IrProperty, parentClass: IrClass) {
-        val backingField = property.backingField ?: return
-        val builder = DeclarationIrBuilder(pluginContext, backingField.symbol)
-
-        // LoggerFactory.getLogger("com.example.MyClass")
-        val className = parentClass.fqNameWhenAvailable?.asString() ?: parentClass.name.asString()
-        val getLoggerCall = builder.irCall(loggerFactoryGetLogger).apply {
-            putValueArgument(0, builder.irString(className))
-        }
-
-        backingField.initializer = pluginContext.irFactory.createExpressionBody(
-            builder.startOffset, builder.endOffset, getLoggerCall
         )
     }
 
-    private fun fillFunctionBody(function: IrSimpleFunction, parentClass: IrClass) {
-        val levelName = function.name.asString()
-        val hasThrowable = function.valueParameters.size == 2
-        val builder = DeclarationIrBuilder(pluginContext, function.symbol)
+    override fun visitSimpleFunction(declaration: IrSimpleFunction) {
+        val origin = declaration.origin
+        if (origin !is IrDeclarationOrigin.GeneratedByPlugin || origin.pluginKey != Slf4jExtensionsPluginKey) return
 
-        val logProperty = parentClass.properties.firstOrNull { it.name.asString() == propertyName } ?: return
-        val logGetter = logProperty.getter ?: return
+        val levelName = declaration.name.asString()
+        if (levelName !in LOG_LEVELS) return
+
+        val regularParams = declaration.parameters.filter { it.kind == IrParameterKind.Regular }
+        val hasThrowable = regularParams.size == 2
+        val parentClass = declaration.parent as? IrClass ?: return
+
+        println("SLF4J-PLUGIN: ${parentClass.name} declarations: ${parentClass.declarations.map { "${it::class.simpleName}(${(it as? IrDeclarationWithName)?.name})" }}")
+        val logGetter = findLogGetter(parentClass)
+        if (logGetter == null) { println("SLF4J-PLUGIN: logGetter not found for $propertyName in ${parentClass.name}"); return }
 
         val isEnabledName = "is${levelName.replaceFirstChar { it.uppercase() }}Enabled"
-        val isEnabledMethod = loggerClassSymbol.functions.firstOrNull {
-            it.owner.name.asString() == isEnabledName && it.owner.valueParameters.isEmpty()
-        } ?: return
+        val isEnabledCandidates = context.referenceFunctions(
+            CallableId(loggerClassId, Name.identifier(isEnabledName))
+        )
+        println("SLF4J-PLUGIN: isEnabled($isEnabledName) candidates: ${isEnabledCandidates.size}")
+        val isEnabledSymbol = isEnabledCandidates.firstOrNull { symbol ->
+            symbol.signature?.toString()?.contains("Marker") != true
+        }
+        if (isEnabledSymbol == null) { println("SLF4J-PLUGIN: isEnabledSymbol not found"); return }
 
-        val logMethod: IrSimpleFunctionSymbol = findLogMethod(levelName, hasThrowable) ?: return
+        val logCandidates = context.referenceFunctions(
+            CallableId(loggerClassId, Name.identifier(levelName))
+        )
+        println("SLF4J-PLUGIN: log($levelName) candidates: ${logCandidates.size}, sigs: ${logCandidates.map { it.signature }}")
+        val logMethodSymbol = logCandidates.firstOrNull { symbol ->
+            val sig = symbol.signature?.toString() ?: ""
+            if (hasThrowable) {
+                sig.contains("Throwable") && !sig.contains("Marker")
+            } else {
+                !sig.contains("Throwable") && !sig.contains("Marker") && !sig.contains("Object")
+            }
+        }
+        if (logMethodSymbol == null) { println("SLF4J-PLUGIN: logMethodSymbol not found for $levelName hasThrowable=$hasThrowable"); return }
 
-        // Resolve Function0.invoke() before entering builder
-        val messageParam = function.valueParameters.last()
-        val messageType = messageParam.type as? IrSimpleType ?: return
-        val function0Class = messageType.classifier.owner as? IrClass ?: return
-        val invokeMethod: IrSimpleFunctionSymbol = function0Class.functions.firstOrNull {
-            it.name.asString() == "invoke" && it.valueParameters.isEmpty()
-        }?.symbol ?: return
+        val invokeCandidates = context.referenceFunctions(
+            CallableId(ClassId(FqName("kotlin"), Name.identifier("Function0")), Name.identifier("invoke"))
+        )
+        println("SLF4J-PLUGIN: invoke candidates: ${invokeCandidates.size}")
+        val invokeSymbol = invokeCandidates.firstOrNull()
+        if (invokeSymbol == null) { println("SLF4J-PLUGIN: invokeSymbol not found"); return }
 
-        function.body = builder.irBlockBody {
-            // val $log = this.log
+        val builder = DeclarationIrBuilder(context, declaration.symbol)
+        val dispatchParam = declaration.dispatchReceiverParameter ?: return
+        val messageParam = regularParams.last()
+
+        declaration.body = builder.irBlockBody {
             val logVal = irTemporary(
                 irCall(logGetter).apply {
-                    dispatchReceiver = irGet(function.dispatchReceiverParameter!!)
+                    dispatchReceiver = irGet(dispatchParam)
                 }
             )
 
-            // if ($log.isXxxEnabled) $log.xxx(message.invoke()) or $log.xxx(message.invoke(), throwable)
-            val invokeMessage = irCall(invokeMethod).apply {
+            val msgExpr = irCall(invokeSymbol).apply {
                 dispatchReceiver = irGet(messageParam)
             }
 
-            val logCall = irCall(logMethod).apply {
-                dispatchReceiver = irGet(logVal)
-                putValueArgument(0, invokeMessage)
+            val logCall = irCall(logMethodSymbol).also { call ->
+                call.dispatchReceiver = irGet(logVal)
+                val logParams = call.symbol.owner.parameters.filter { it.kind == IrParameterKind.Regular }
+                call.arguments[logParams[0].indexInParameters] = msgExpr
                 if (hasThrowable) {
-                    putValueArgument(1, irGet(function.valueParameters[0]))
+                    call.arguments[logParams[1].indexInParameters] = irGet(regularParams[0])
                 }
             }
 
             +irIfThen(
-                pluginContext.irBuiltIns.unitType,
-                irCall(isEnabledMethod).apply {
-                    dispatchReceiver = irGet(logVal)
-                },
+                context.irBuiltIns.unitType,
+                irCall(isEnabledSymbol).apply { dispatchReceiver = irGet(logVal) },
                 logCall,
             )
         }
     }
 
-    private fun findLogMethod(levelName: String, hasThrowable: Boolean): IrSimpleFunctionSymbol? {
-        val stringClassSymbol = pluginContext.irBuiltIns.stringClass
-        val throwableClassId = ClassId(FqName("java.lang"), Name.identifier("Throwable"))
-        val throwableClassSymbol = pluginContext.referenceClass(throwableClassId)
-
-        return loggerClassSymbol.functions.firstOrNull { func ->
-            val f = func.owner
-            if (f.name.asString() != levelName) return@firstOrNull false
-            if (hasThrowable) {
-                f.valueParameters.size == 2 &&
-                (f.valueParameters[0].type as? IrSimpleType)?.classifier == stringClassSymbol &&
-                (f.valueParameters[1].type as? IrSimpleType)?.classifier == throwableClassSymbol
-            } else {
-                f.valueParameters.size == 1 &&
-                (f.valueParameters[0].type as? IrSimpleType)?.classifier == stringClassSymbol
+    private fun findLogGetter(irClass: IrClass): IrSimpleFunction? {
+        for (decl in irClass.declarations) {
+            if (decl is IrProperty && decl.name.asString() == propertyName) {
+                return decl.getter
             }
         }
+        return null
+    }
+
+    private fun buildClassName(irClass: IrClass): String {
+        val parts = mutableListOf(irClass.name.asString())
+        var parent = irClass.parent
+        while (parent is IrClass) {
+            parts.add(0, parent.name.asString())
+            parent = parent.parent
+        }
+        if (parent is IrPackageFragment) {
+            val pkg = parent.packageFqName.asString()
+            if (pkg.isNotEmpty()) return "$pkg.${parts.joinToString(".")}"
+        }
+        return parts.joinToString(".")
     }
 
     companion object {
