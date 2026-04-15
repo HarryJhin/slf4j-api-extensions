@@ -1,127 +1,140 @@
-[![Build](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/build.yml/badge.svg)](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/build.yml)
-[![Deploy to GitHub Pages](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/static.yml/badge.svg)](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/static.yml)
-[![Publish to Sonatype](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/publish.yml/badge.svg)](https://github.com/HarryJhin/slf4j-api-extensions/actions/workflows/publish.yml)
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.harryjhin/slf4j-api-extensions.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.harryjhin/slf4j-api-extensions)
-[![Kotlin](https://img.shields.io/badge/kotlin-2.0.10-blue.svg?logo=kotlin)](http://kotlinlang.org)
-[![KDoc link](https://img.shields.io/badge/API_reference-KDoc-blue)](https://harryjhin.github.io/slf4j-api-extensions/)
-[![License](https://img.shields.io/github/license/HarryJhin/slf4j-api-extensions)](https://opensource.org/licenses/MIT)
+# slf4j-extensions
 
-# Kotlin 사용자를 위한 SLF4J 확장 라이브러리
+[![Kotlin](https://img.shields.io/badge/Kotlin-1.5%2B-7F52FF.svg?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![SLF4J](https://img.shields.io/badge/SLF4J-1.7.36%2B-blue.svg)](https://www.slf4j.org/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-`slf4j-api-extensions`는 Kotlin 사용자들에게 SLF4J(Simple Logging Facade for Java)를 더욱 편리하게 사용할 수 있도록 돕는 라이브러리입니다.
+**Zero-boilerplate SLF4J logging** for Kotlin — a compiler plugin that auto-injects Logger and inline logging functions into your classes.
 
-## 주요 특징
+## The Problem
 
-1. `slf4j-api` 확장: 구현체를 직접 사용하는 대신 `slf4j-api`를 확장하여 사용할 수 있는 기능을 제공합니다.
-   즉, `slf4j-simple`, `log4j2`, `logback` 등의 구현체를 사용하는 경우에 모두 동일한 API를 사용할 수 있습니다.
-2. 캐싱: `Logger` 인스턴스를 캐싱하여 불필요한 인스턴스 생성을 줄여줍니다.
-3. 함수형 패러다임: 함수형 프로그래밍 스타일로 로깅을 할 수 있도록 지원합니다.
-
-## dependency
+Every class that logs needs the same boilerplate:
 
 ```kotlin
-dependencies {
-    implementation("io.github.harryjhin:slf4j-api-extensions:$version")
-}
-```
+class OrderService {
+    private val log = LoggerFactory.getLogger(OrderService::class.java)
 
-## 구성
-
-### Logger Cache
-
-`Logger` 인스턴스 생성은 비용이 비싸기 때문에, `Logger` 인스턴스를 캐싱하여 불필요한 인스턴스 생성을 줄여줍니다.
-단, 최대 1,000개의 `Logger` 인스턴스만 캐싱합니다.
-만약 캐싱된 `Logger` 인스턴스가 1,000개를 넘어가면, 가장 오래된 `Logger` 인스턴스를 제거합니다(FIFO).
-최대 캐싱 개수를 변경하려면 `slf4j-api-extensions.properties` 파일을 생성하고 `max-cache-size` 값을 변경하면 됩니다.
-
-`src/main/resources/slf4j-api-extensions.properties`:
-
-```properties
-max-cache-size=100
-```
-
-## 사용법
-
-`slf4j-api-extensions`는 내부에서 활성화된 로그 레벨을 확인하고, 활성화되었을 때만 `message`를 생성합니다.
-여기서 `message`는 `() -> String` 형태의 람다 함수입니다.
-이렇게 함으로써, 로그 레벨이 활성화되지 않은 경우에는 `message`를 생성하지 않음으로써 성능을 향상시킬 수 있습니다.
-
-### trace
-
-```kotlin
-class MyClass {
-
-    fun myFunc() {
-        trace { "trace message" }
-    }
-
-    fun throwableFunc() {
-        val throwable = Throwable("throwable message")
-        trace(throwable) { "trace message" }
+    fun process(order: Order) {
+        if (log.isTraceEnabled) log.trace("processing: ${order.id}")
+        log.info("order completed")
+        log.error("processing failed", exception)
     }
 }
 ```
 
-### debug
+Logger declaration repeated in every class. Manual `isXxxEnabled` checks to avoid string concatenation overhead.
+
+## The Solution
 
 ```kotlin
-class MyClass {
-
-    fun myFunc() {
-        debug { "debug message" }
-    }
-
-    fun throwableFunc() {
-        val throwable = Throwable("throwable message")
-        debug(throwable) { "debug message" }
+class OrderService {
+    fun process(order: Order) {
+        trace { "processing: ${order.id}" }
+        info { "order completed" }
+        error(exception) { "processing failed" }
     }
 }
 ```
 
-### info
+- **Zero boilerplate** — no Logger declaration needed
+- **Lazy evaluation** — lambda not evaluated when level is disabled (inline functions)
+- **Correct Logger name** — always matches the class (`com.example.OrderService`)
+- **No runtime magic** — pure compile-time code generation
+
+## Quick Start
 
 ```kotlin
-class MyClass {
-
-    fun myFunc() {
-        info { "info message" }
-    }
-
-    fun throwableFunc() {
-        val throwable = Throwable("throwable message")
-        info(throwable) { "info message" }
-    }
+// build.gradle.kts
+plugins {
+    kotlin("jvm") version "2.3.20"
+    id("io.github.harryjhin.slf4j-extensions") version "2.0.0"
 }
 ```
 
-### warn
+That's it. Write `trace { }`, `debug { }`, `info { }`, `warn { }`, `error { }` in any class.
+
+## Configuration
 
 ```kotlin
-class MyClass {
+slf4jExtensions {
+    propertyName = "log"     // Logger property name (default: "log")
+    allClasses = true        // Apply to all classes (default: true)
 
-    fun myFunc() {
-        warn { "warn message" }
-    }
-
-    fun throwableFunc() {
-        val throwable = Throwable("throwable message")
-        warn(throwable) { "warn message" }
-    }
+    // Or filter by annotation / package:
+    annotation("com.example.Logged")
+    packages("com.example.service")
 }
 ```
 
-### error
+## Features
+
+### Lazy Message Evaluation
 
 ```kotlin
-class MyClass {
+// Lambda is NOT called when trace is disabled
+trace { "expensive computation: ${heavyToString()}" }
+```
 
-    fun myFunc() {
-        error { "error message" }
-    }
+### Throwable Support
 
-    fun throwableFunc() {
-        val throwable = Throwable("throwable message")
-        error(throwable) { "error message" }
-    }
+```kotlin
+try {
+    riskyOperation()
+} catch (e: Exception) {
+    error(e) { "operation failed" }
 }
 ```
+
+### Marker Support (via runtime extensions)
+
+```kotlin
+val AUDIT = MarkerFactory.getMarker("AUDIT")
+log.info(AUDIT) { "user logged in: $userId" }
+```
+
+### MDC Scoping
+
+```kotlin
+withMDC("requestId" to "abc-123") {
+    info { "processing" }  // MDC contains requestId
+}
+// MDC automatically restored
+```
+
+### `kotlin.error()` Compatibility
+
+```kotlin
+error("msg")    // -> kotlin.error() -> throws IllegalStateException
+error { "msg" } // -> logging function -> logs at ERROR level
+```
+
+Different syntax (`()` vs `{}`), no ambiguity.
+
+## Modules
+
+| Module | Description |
+|--------|-------------|
+| `slf4j-extensions-runtime` | Inline Logger/Marker/MDC extension functions |
+| `slf4j-extensions-compiler` | Compiler plugin (fat JAR) |
+| `slf4j-extensions-gradle-plugin` | Gradle plugin for one-liner setup |
+
+## Compatibility
+
+| Item | Minimum |
+|------|---------|
+| Kotlin | 1.5+ (K1) / 2.0+ (K2) |
+| Java | 8+ |
+| SLF4J | 1.7.36+ |
+| Gradle | 8.0+ |
+
+## For LLMs
+
+This project provides machine-readable documentation:
+
+- [`llms.txt`](llms.txt) — Summary + links ([llmstxt.org](https://llmstxt.org/) standard)
+- [`llms-full.txt`](llms-full.txt) — Complete API signatures and usage examples
+- [`AGENTS.md`](AGENTS.md) — Architecture map and build commands for AI agents
+
+## License
+
+[MIT License](LICENSE)

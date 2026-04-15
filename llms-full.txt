@@ -1,0 +1,186 @@
+# slf4j-extensions
+
+> Kotlin compiler plugin that eliminates SLF4J logging boilerplate by auto-injecting a private `log: Logger` property and 10 inline logging functions into classes. Users write `trace { "message" }` directly — no Logger declaration needed. Lambda is not evaluated when log level is disabled. Supports K1 and K2 compiler pipelines. Works with Kotlin 1.5+, SLF4J 1.7.36+, Java 8+.
+
+Documentation: https://github.com/HarryJhin/slf4j-api-extensions
+
+## The Problem
+
+Every class that logs needs the same boilerplate:
+
+```kotlin
+class OrderService {
+    private val log = LoggerFactory.getLogger(OrderService::class.java)
+
+    fun process(order: Order) {
+        if (log.isTraceEnabled) log.trace("processing: ${order.id}")
+        log.info("order completed")
+        log.error("processing failed", exception)
+    }
+}
+```
+
+Logger declaration is repeated in every class. Level-guarded logging requires manual `isXxxEnabled` checks to avoid string concatenation overhead.
+
+## The Solution
+
+```kotlin
+class OrderService {
+    fun process(order: Order) {
+        trace { "processing: ${order.id}" }
+        info { "order completed" }
+        error(exception) { "processing failed" }
+    }
+}
+```
+
+Zero boilerplate. Lambda is not evaluated when level is disabled.
+
+## Installation
+
+```kotlin
+// build.gradle.kts
+plugins {
+    id("io.github.harryjhin.slf4j-extensions") version "2.0.0"
+}
+```
+
+That's it. The plugin auto-adds the runtime dependency.
+
+## Gradle Configuration
+
+```kotlin
+slf4jExtensions {
+    propertyName = "log"       // Logger property name (default: "log")
+    allClasses = true          // Apply to all classes (default: true)
+    annotation("com.example.Logged")  // Or filter by annotation
+    packages("com.example.service")   // Or filter by package
+}
+```
+
+## What The Compiler Generates
+
+Source code:
+```kotlin
+class OrderService {
+    fun process() {
+        trace { "start" }
+        info { "done" }
+        error(exception) { "failed" }
+    }
+}
+```
+
+Bytecode-equivalent after compilation:
+```kotlin
+class OrderService {
+    private val log: Logger = LoggerFactory.getLogger("com.example.OrderService")
+
+    private inline fun trace(message: () -> String) {
+        if (log.isTraceEnabled) log.trace(message())
+    }
+    private inline fun trace(throwable: Throwable, message: () -> String) {
+        if (log.isTraceEnabled) log.trace(message(), throwable)
+    }
+    // debug, info, warn, error × 2 — same pattern (10 total)
+
+    fun process() {
+        trace { "start" }
+        info { "done" }
+        error(exception) { "failed" }
+    }
+}
+```
+
+## Target Class Kinds
+
+| Kind | Logger injected | Notes |
+|------|----------------|-------|
+| `class` | Yes | Primary target |
+| `data class` | Yes | May have methods that log |
+| `enum class` | Yes | |
+| `sealed class` | Yes | Each subclass gets its own logger |
+| `object` | Yes | Singleton services |
+| `abstract class` | Yes | |
+| `interface` | No | No instance state |
+| `annotation class` | No | |
+
+## Skip Conditions
+
+1. Class kind is `interface` or `annotation class`
+2. Class already has a property with the configured name (default: `log`)
+3. Gradle config specifies annotation/package filters and class doesn't match
+
+## `kotlin.error()` Non-Collision
+
+```kotlin
+error("msg")    // → kotlin.error(Any) → throws IllegalStateException
+error { "msg" } // → injected function → logs at ERROR level
+```
+
+Different call syntax (`()` vs `{}`). No ambiguity.
+
+## Runtime Module API
+
+### Logger Extensions (10 functions)
+
+```kotlin
+// LoggerExtensions.kt
+inline fun Logger.trace(message: () -> String)
+inline fun Logger.trace(throwable: Throwable, message: () -> String)
+inline fun Logger.debug(message: () -> String)
+inline fun Logger.debug(throwable: Throwable, message: () -> String)
+inline fun Logger.info(message: () -> String)
+inline fun Logger.info(throwable: Throwable, message: () -> String)
+inline fun Logger.warn(message: () -> String)
+inline fun Logger.warn(throwable: Throwable, message: () -> String)
+inline fun Logger.error(message: () -> String)
+inline fun Logger.error(throwable: Throwable, message: () -> String)
+```
+
+Pattern: `if (isXxxEnabled) xxx(message())` — lambda not allocated when level disabled.
+
+### Marker Extensions (10 functions)
+
+```kotlin
+// MarkerExtensions.kt — accessed via log.info(marker) { "msg" }
+inline fun Logger.trace(marker: Marker, message: () -> String)
+inline fun Logger.trace(marker: Marker, throwable: Throwable, message: () -> String)
+// debug, info, warn, error × 2 — same pattern
+```
+
+Marker functions are NOT injected by compiler — accessed via `log.info(marker) { }`.
+
+### MDC Utilities (2 functions)
+
+```kotlin
+// MdcExtensions.kt
+inline fun <T> withMDC(vararg pairs: Pair<String, String>, block: () -> T): T
+inline fun <T> withMDC(context: Map<String, String>, block: () -> T): T
+```
+
+Sets MDC values for the duration of `block`, restores previous values on exit (exception-safe).
+
+```kotlin
+withMDC("requestId" to "abc-123", "userId" to "user-1") {
+    info { "processing request" }  // MDC contains requestId + userId
+}
+// MDC restored to previous state
+```
+
+## Modules
+
+| Module | Artifact | Description |
+|--------|----------|-------------|
+| `slf4j-extensions-runtime` | `io.github.harryjhin:slf4j-extensions-runtime` | Inline Logger/Marker/MDC extensions |
+| `slf4j-extensions-compiler` | `io.github.harryjhin:slf4j-extensions-compiler` | Compiler plugin (fat JAR) |
+| `slf4j-extensions-gradle-plugin` | `io.github.harryjhin:slf4j-extensions-gradle-plugin` | Gradle plugin |
+
+## Compatibility
+
+| Item | Minimum | Notes |
+|------|---------|-------|
+| Kotlin | 1.5 | K1 pipeline; K2 for 2.0+ |
+| Java | 8 | Runtime target |
+| SLF4J | 1.7.36 | Compatible with 2.0 |
+| Gradle | 8.0+ | For Gradle plugin |
