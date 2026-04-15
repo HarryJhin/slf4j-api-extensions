@@ -2,6 +2,8 @@ plugins {
     kotlin("jvm")
 }
 
+val kotlinVersion: String by project
+
 dependencies {
     implementation(project(":slf4j-extensions-common"))
     implementation(project(":slf4j-extensions-k1"))
@@ -10,8 +12,8 @@ dependencies {
     compileOnly("org.jetbrains.kotlin:kotlin-compiler-embeddable")
 
     testImplementation(project(":slf4j-extensions-runtime"))
-    testImplementation("org.jetbrains.kotlin:kotlin-compiler:2.3.20")
-    testImplementation("org.jetbrains.kotlin:kotlin-compiler-internal-test-framework:2.3.20")
+    testImplementation("org.jetbrains.kotlin:kotlin-compiler:$kotlinVersion")
+    testImplementation("org.jetbrains.kotlin:kotlin-compiler-internal-test-framework:$kotlinVersion")
     testImplementation(kotlin("test"))
     testImplementation(platform("org.junit:junit-bom:5.10.1"))
     testImplementation("org.junit.jupiter:junit-jupiter")
@@ -20,9 +22,9 @@ dependencies {
     testImplementation("org.junit.platform:junit-platform-runner")
     testImplementation("org.junit.platform:junit-platform-suite-api")
 
-    testRuntimeOnly("org.jetbrains.kotlin:kotlin-reflect:2.3.20")
-    testRuntimeOnly("org.jetbrains.kotlin:kotlin-script-runtime:2.3.20")
-    testRuntimeOnly("org.jetbrains.kotlin:kotlin-annotations-jvm:2.3.20")
+    testRuntimeOnly("org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion")
+    testRuntimeOnly("org.jetbrains.kotlin:kotlin-script-runtime:$kotlinVersion")
+    testRuntimeOnly("org.jetbrains.kotlin:kotlin-annotations-jvm:$kotlinVersion")
 }
 
 tasks.test {
