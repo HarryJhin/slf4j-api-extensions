@@ -41,11 +41,12 @@ Zero boilerplate. Lambda is not evaluated when level is disabled.
 ```kotlin
 // build.gradle.kts
 plugins {
-    id("io.github.harryjhin.slf4j-extensions") version "2.0.0"
+    kotlin("jvm") version "2.3.20"
+    id("io.github.harryjhin.slf4j-extensions") version "2.3.20"  // Kotlin 버전과 동일
 }
 ```
 
-That's it. The plugin auto-adds the runtime dependency.
+Plugin version must match the Kotlin version. The plugin auto-adds the runtime dependency.
 
 ## Gradle Configuration
 
@@ -178,9 +179,11 @@ withMDC("requestId" to "abc-123", "userId" to "user-1") {
 
 ## Compatibility
 
-| Item | Minimum | Notes |
-|------|---------|-------|
-| Kotlin | 1.5 | K1 pipeline; K2 for 2.0+ |
-| Java | 8 | Runtime target |
-| SLF4J | 1.7.36 | Compatible with 2.0 |
-| Gradle | 8.0+ | For Gradle plugin |
+Plugin version = Kotlin version. CI builds and publishes for each supported Kotlin version.
+
+| Item | Requirement |
+|------|-------------|
+| Plugin version | = Kotlin version |
+| Java | 8+ |
+| SLF4J | 1.7.36+ (compatible with 2.0) |
+| Gradle | 8.0+ |

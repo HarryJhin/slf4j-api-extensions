@@ -47,7 +47,7 @@ class OrderService {
 // build.gradle.kts
 plugins {
     kotlin("jvm") version "2.3.20"
-    id("io.github.harryjhin.slf4j-extensions") version "2.0.0"
+    id("io.github.harryjhin.slf4j-extensions") version "2.3.20"  // Kotlin 버전과 동일
 }
 ```
 
@@ -120,9 +120,16 @@ Different syntax (`()` vs `{}`), no ambiguity.
 
 ## Compatibility
 
-| Item | Minimum |
-|------|---------|
-| Kotlin | 1.5+ (K1) / 2.0+ (K2) |
+플러그인 버전을 **사용 중인 Kotlin 버전과 동일하게** 지정합니다.
+
+```kotlin
+kotlin("jvm") version "2.3.20"
+id("io.github.harryjhin.slf4j-extensions") version "2.3.20"  // 동일
+```
+
+| Item | Requirement |
+|------|-------------|
+| Plugin version | = Kotlin version |
 | Java | 8+ |
 | SLF4J | 1.7.36+ |
 | Gradle | 8.0+ |
