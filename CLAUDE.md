@@ -53,7 +53,9 @@ extensions-runtime/    # 사용자 런타임 (Logger/Marker/MDC 확장)
 
 필수 opt-in (build.gradle.kts): `ExperimentalCompilerApi`, `UnsafeDuringIrConstructionAPI`
 
-- 함수 탐색: `finderForBuiltins().findFunctions(CallableId)`
+- 함수 탐색 (Kotlin 내장/인터페이스 메서드): `context.referenceFunctions(CallableId)` — deprecated 경고 있지만 동작
+- 함수 탐색 (Java static 메서드): `context.referenceClass(classId).owner.declarations` 순회 — `referenceFunctions`는 Java static 메서드를 못 찾음
+- `finderForBuiltins().findFunctions(CallableId)` — IC 호환 새 API이지만 Java 라이브러리 메서드 해결에 문제 있을 수 있음
 - 호출 인자: `call.arguments[param.indexInParameters] = expr`
 - 함수 파라미터: `function.parameters.filter { it.kind == IrParameterKind.Regular }`
 - IR 노드 생성: `DeclarationIrBuilder` + 빌더 DSL. 직접 Impl 생성자 호출 금지
@@ -70,9 +72,14 @@ extensions-runtime/    # 사용자 런타임 (Logger/Marker/MDC 확장)
 ## Gotchas
 
 - `createMemberProperty`에 `withGeneratedDefaultInitializer()` 필수 — 없으면 FIR→IR 변환에서 프로퍼티 누락 (plugin-sandbox에서 확인)
+- `createMemberFunction`에 `status { isInline = true }` — inline 함수 생성 시 필수
+- 테스트에서 외부 라이브러리 타입 사용 시 `EnvironmentConfigurator.configureCompilerConfiguration`에서 `addJvmClasspathRoot`로 JAR 추가 필요 + `RuntimeClasspathProvider`로 런타임 classpath도 추가
+- Java stub `IrClassSymbol`과 Kotlin builtin `IrClassSymbol`은 같은 이름이라도 다른 인스턴스 — `classOrNull == symbol` 비교 불가. `owner.name.asString()` 이름 비교 사용
+- `referenceFunctions(CallableId)`는 Java static 메서드를 못 찾음 — `referenceClass` + `declarations` 순회로 대체
 - `@DeprecatedForRemovalCompilerApi` — `@OptIn`이나 `@Suppress`로 억제 불가. 반드시 대체 API 사용
 - `IrSymbol.owner` — `@UnsafeDuringIrConstructionAPI` opt-in 필요 (build.gradle.kts에서 전역 설정)
 - `kotlin-compiler` (non-embeddable) vs `kotlin-compiler-embeddable` — 테스트에서는 non-embeddable, 메인 소스에서는 embeddable 사용. 같은 classpath에 공존 불가
+- box test에 `// FULL_JDK` 디렉티브 필요 — JDK 타입 (RuntimeException, Serializable 등) 사용 시
 
 ## Specs & Plans
 
