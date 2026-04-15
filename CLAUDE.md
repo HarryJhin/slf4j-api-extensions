@@ -49,14 +49,15 @@ extensions-runtime/    # 사용자 런타임 (Logger/Marker/MDC 확장)
 - JDK 17+ (build) — Kotlin 2.3.20 컴파일러 실행에 필요
 - Gradle 8.8 (wrapper 포함)
 
-## Kotlin 2.3.20 Compiler Plugin API
+## Compiler Plugin API (Kotlin 2.3.20)
 
-상세: `docs/superpowers/plans/2026-04-15-plan2-findings.md`
+필수 opt-in (build.gradle.kts): `ExperimentalCompilerApi`, `UnsafeDuringIrConstructionAPI`
 
-- 필수 opt-in: `ExperimentalCompilerApi`, `UnsafeDuringIrConstructionAPI` (build.gradle.kts에서 전역)
-- `@DeprecatedForRemovalCompilerApi` 달린 API는 `@OptIn`/`@Suppress` 불가 — 대체 API 사용 필수
-- IR 노드: `DeclarationIrBuilder` + 빌더 DSL 사용. 직접 Impl 생성자 호출 금지
-- 함수 탐색: `referenceFunctions` deprecated -> `finderForBuiltins().findFunctions()` 사용
+- 함수 탐색: `finderForBuiltins().findFunctions(CallableId)`
+- 호출 인자: `call.arguments[param.indexInParameters] = expr`
+- 함수 파라미터: `function.parameters.filter { it.kind == IrParameterKind.Regular }`
+- IR 노드 생성: `DeclarationIrBuilder` + 빌더 DSL. 직접 Impl 생성자 호출 금지
+- IR body 패턴: `IrVisitorVoid` + `visitSimpleFunction`/`visitProperty`, origin `GeneratedByPlugin(PluginKey)` 체크
 - 참고 템플릿: https://github.com/Kotlin/compiler-plugin-template
 
 ## Testing
