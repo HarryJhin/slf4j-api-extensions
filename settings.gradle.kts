@@ -6,3 +6,8 @@ rootProject.name = "slf4j-extensions"
 
 include(":extensions-common")
 include(":extensions-runtime")
+include(":extensions-k1")
+include(":extensions-k2")
+include(":extensions-backend")
+include(":extensions-cli")
+include(":extensions-compiler")
