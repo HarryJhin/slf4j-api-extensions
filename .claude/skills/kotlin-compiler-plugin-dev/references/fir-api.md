@@ -21,7 +21,7 @@ PropertyBuildingContext 설정:
 - `modality = Modality.FINAL` (기본 FINAL)
 - `extensionReceiverType(type)` — 확장 프로퍼티
 - `setter(visibility)` — var setter visibility
-- `withGeneratedDefaultInitializer()` — backing field + not abstract일 때 기본 초기화자
+- **`withGeneratedDefaultInitializer()`** — **필수** (backing field가 있는 비abstract 프로퍼티). 이것 없으면 FIR→IR 변환에서 프로퍼티가 누락됨. stub 초기화자(throw)를 생성하며, 실제 값은 IR에서 채움. (plugin-sandbox/DataFrameLikeTypeMembersGenerator에서 확인)
 
 ## createMemberFunction
 

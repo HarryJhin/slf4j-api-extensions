@@ -121,11 +121,22 @@ builder.irBlockBody {
 }
 ```
 
-## 현재 블로커
+## 현재 블로커 — 원인 특정됨
 
-`FirSlf4jDeclarationGenerator.generateProperties()`에서 `createMemberProperty()`로 생성한 `log: Logger` 프로퍼티가 IR에 나타나지 않는다. IR의 `visitProperty`가 호출되지 않고 클래스 declarations에 IrProperty가 없음.
+`FirSlf4jDeclarationGenerator.generateProperties()`에서 `createMemberProperty()`로 생성한 `log: Logger` 프로퍼티가 IR에 나타나지 않았음.
 
-**조사 방향**: no-arg 플러그인은 `generateConstructors()`로 생성자를 만들고 IR에 나타남. 프로퍼티 생성 시 다른 점이 있는지 `/Users/jjh/Projects/kotlin/compiler/fir/plugin-utils/src/org/jetbrains/kotlin/fir/plugin/PropertyBuildingContext.kt`의 `build()` 메서드와 우리 `generateProperties()` 호출을 비교할 것.
+**원인**: `withGeneratedDefaultInitializer()` 호출 누락. plugin-sandbox의 `DataFrameLikeTypeMembersGenerator`에서 확인 — 모든 `createMemberProperty` 호출에 이 메서드가 포함됨. 이것 없이는 backing field 프로퍼티가 FIR→IR 변환에서 누락됨.
+
+**수정**:
+```kotlin
+createMemberProperty(owner, key, name, returnType, isVal = true, hasBackingField = true) {
+    visibility = Visibilities.Private
+    modality = Modality.FINAL
+    withGeneratedDefaultInitializer()  // ← 필수!
+}
+```
+
+수정 후 IR에서 `visitProperty`가 호출되면, `backingField.initializer`를 `LoggerFactory.getLogger()` 호출로 교체하면 됨.
 
 ## 필수 opt-in (build.gradle.kts)
 
