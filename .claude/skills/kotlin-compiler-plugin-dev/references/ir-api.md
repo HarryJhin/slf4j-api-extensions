@@ -81,7 +81,7 @@ val valueParameters = parameters.filter { it.kind == IrParameterKind.Regular || 
 ### 함수/클래스 탐색 (power-assert 소스에서 확인)
 
 ```kotlin
-// 함수 탐색 — finderForBuiltins() 사용 (power-assert에서 확인):
+// 함수 탐색 — finderForBuiltins() 사용:
 val finder = context.finderForBuiltins()
 val functions = finder.findFunctions(CallableId(classId, Name.identifier("methodName")))
 val clazz = finder.findClass(ClassId.topLevel(FqName("java.util.function.Supplier")))
@@ -89,6 +89,43 @@ val clazz = finder.findClass(ClassId.topLevel(FqName("java.util.function.Supplie
 // 클래스 참조:
 context.referenceClass(ClassId(FqName("org.slf4j"), Name.identifier("Logger")))
 ```
+
+> `referenceFunctions()`는 deprecated. `finderForBuiltins().findFunctions()` 사용.
+
+## 이 프로젝트 — SLF4J Logger 주입 IR 패턴
+
+```kotlin
+// 1. LoggerFactory.getLogger(String) 호출 생성
+val getLoggerSymbol = context.finderForBuiltins().findFunctions(
+    CallableId(ClassId(FqName("org.slf4j"), Name.identifier("LoggerFactory")), Name.identifier("getLogger"))
+).first { it.signature?.toString()?.contains("String") == true }
+
+val builder = DeclarationIrBuilder(context, backingField.symbol)
+backingField.initializer = builder.irExprBody(
+    builder.irCall(getLoggerSymbol).also { call ->
+        call.arguments[0] = builder.irString(className)
+    }
+)
+
+// 2. if (log.isXxxEnabled) log.xxx(message.invoke()) body 생성
+builder.irBlockBody {
+    val logVal = irTemporary(irCall(logGetter).apply { dispatchReceiver = irGet(dispatchParam) })
+    val msgExpr = irCall(invokeSymbol).apply { dispatchReceiver = irGet(messageParam) }
+    val logCall = irCall(logMethodSymbol).also { call ->
+        call.dispatchReceiver = irGet(logVal)
+        call.arguments[0] = msgExpr
+    }
+    +irIfThen(context.irBuiltIns.unitType,
+        irCall(isEnabledSymbol).apply { dispatchReceiver = irGet(logVal) },
+        logCall)
+}
+```
+
+## 현재 블로커
+
+`FirSlf4jDeclarationGenerator.generateProperties()`에서 `createMemberProperty()`로 생성한 `log: Logger` 프로퍼티가 IR에 나타나지 않는다. IR의 `visitProperty`가 호출되지 않고 클래스 declarations에 IrProperty가 없음.
+
+**조사 방향**: no-arg 플러그인은 `generateConstructors()`로 생성자를 만들고 IR에 나타남. 프로퍼티 생성 시 다른 점이 있는지 `/Users/jjh/Projects/kotlin/compiler/fir/plugin-utils/src/org/jetbrains/kotlin/fir/plugin/PropertyBuildingContext.kt`의 `build()` 메서드와 우리 `generateProperties()` 호출을 비교할 것.
 
 ## 필수 opt-in (build.gradle.kts)
 
