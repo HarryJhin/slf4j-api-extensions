@@ -20,25 +20,37 @@ class Slf4jExtensionsCompilerPluginRegistrar : CompilerPluginRegistrar() {
     override val supportsK2: Boolean = true
 
     override fun ExtensionStorage.registerExtensions(configuration: CompilerConfiguration) {
-        val propertyName = configuration.get(Slf4jExtensionsConfigurationKeys.PROPERTY_NAME)
-            ?: Slf4jExtensionsPluginNames.DEFAULT_PROPERTY_NAME
-        val annotations = configuration.get(Slf4jExtensionsConfigurationKeys.ANNOTATIONS) ?: emptyList()
-        val packages = configuration.get(Slf4jExtensionsConfigurationKeys.PACKAGES) ?: emptyList()
-        val allClasses = configuration.get(Slf4jExtensionsConfigurationKeys.ALL_CLASSES) ?: true
+        Companion.registerExtensions(this, configuration)
+    }
 
-        // K1 frontend
-        SyntheticResolveExtension.registerExtension(
-            Slf4jSyntheticResolveExtension(propertyName, annotations, packages, allClasses)
-        )
+    companion object {
+        fun registerExtensions(
+            extensionStorage: ExtensionStorage,
+            configuration: CompilerConfiguration,
+        ) = with(extensionStorage) {
+            val propertyName = configuration.get(Slf4jExtensionsConfigurationKeys.PROPERTY_NAME)
+                ?: Slf4jExtensionsPluginNames.DEFAULT_PROPERTY_NAME
+            val annotations = configuration.get(Slf4jExtensionsConfigurationKeys.ANNOTATIONS)
+                ?: emptyList()
+            val packages = configuration.get(Slf4jExtensionsConfigurationKeys.PACKAGES)
+                ?: emptyList()
+            val allClasses = configuration.get(Slf4jExtensionsConfigurationKeys.ALL_CLASSES)
+                ?: true
 
-        // K2 FIR frontend
-        FirExtensionRegistrarAdapter.registerExtension(
-            FirSlf4jExtensionRegistrar(propertyName, annotations, packages, allClasses)
-        )
+            // K1 frontend
+            SyntheticResolveExtension.registerExtension(
+                Slf4jSyntheticResolveExtension(propertyName, annotations, packages, allClasses)
+            )
 
-        // IR backend (shared for K1 and K2)
-        IrGenerationExtension.registerExtension(
-            Slf4jIrGenerationExtension(propertyName)
-        )
+            // K2 FIR frontend
+            FirExtensionRegistrarAdapter.registerExtension(
+                FirSlf4jExtensionRegistrar(propertyName, annotations, packages, allClasses)
+            )
+
+            // IR backend (shared for K1 and K2)
+            IrGenerationExtension.registerExtension(
+                Slf4jIrGenerationExtension(propertyName)
+            )
+        }
     }
 }

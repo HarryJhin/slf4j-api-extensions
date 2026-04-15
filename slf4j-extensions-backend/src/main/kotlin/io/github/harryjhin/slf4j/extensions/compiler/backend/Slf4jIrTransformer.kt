@@ -3,7 +3,9 @@ package io.github.harryjhin.slf4j.extensions.compiler.backend
 import io.github.harryjhin.slf4j.extensions.compiler.Slf4jExtensionsPluginKey
 import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
 import org.jetbrains.kotlin.backend.common.lower.DeclarationIrBuilder
+import org.jetbrains.kotlin.descriptors.CallableMemberDescriptor
 import org.jetbrains.kotlin.ir.IrElement
+import org.jetbrains.kotlin.ir.ObsoleteDescriptorBasedAPI
 import org.jetbrains.kotlin.ir.builders.irBlockBody
 import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irExprBody
@@ -21,13 +23,11 @@ import org.jetbrains.kotlin.ir.declarations.IrPackageFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
-import org.jetbrains.kotlin.ir.ObsoleteDescriptorBasedAPI
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
-import org.jetbrains.kotlin.descriptors.CallableMemberDescriptor
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
-import org.jetbrains.kotlin.name.CallableId
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
@@ -38,12 +38,15 @@ class Slf4jIrTransformer(
     private val propertyName: String,
 ) : IrVisitorVoid() {
 
-    private val loggerClassId = ClassId(FqName("org.slf4j"), Name.identifier("Logger"))
+    private val loggerClassSymbol: IrClassSymbol by lazy {
+        context.referenceClass(ClassId(FqName("org.slf4j"), Name.identifier("Logger")))
+            ?: error("Cannot find org.slf4j.Logger")
+    }
 
     private val getLoggerSymbol: IrSimpleFunctionSymbol by lazy {
-        val factoryClassId = ClassId(FqName("org.slf4j"), Name.identifier("LoggerFactory"))
-        val factoryClass = context.referenceClass(factoryClassId)
-            ?: error("Cannot find org.slf4j.LoggerFactory")
+        val factoryClass = context.referenceClass(
+            ClassId(FqName("org.slf4j"), Name.identifier("LoggerFactory"))
+        ) ?: error("Cannot find org.slf4j.LoggerFactory")
         factoryClass.owner.declarations
             .filterIsInstance<IrSimpleFunction>()
             .filter { it.name.asString() == "getLogger" }
@@ -56,12 +59,13 @@ class Slf4jIrTransformer(
     }
 
     private val invokeSymbol: IrSimpleFunctionSymbol by lazy {
-        context.referenceFunctions(
-            CallableId(
-                ClassId(FqName("kotlin"), Name.identifier("Function0")),
-                Name.identifier("invoke"),
-            )
-        ).first()
+        val function0Class = context.referenceClass(
+            ClassId(FqName("kotlin"), Name.identifier("Function0"))
+        ) ?: error("Cannot find kotlin.Function0")
+        function0Class.owner.declarations
+            .filterIsInstance<IrSimpleFunction>()
+            .first { it.name.asString() == "invoke" }
+            .symbol
     }
 
     override fun visitElement(element: IrElement) {
@@ -75,10 +79,8 @@ class Slf4jIrTransformer(
     @OptIn(ObsoleteDescriptorBasedAPI::class)
     private fun isPluginGenerated(declaration: IrDeclaration): Boolean =
         if (context.afterK2) {
-            // K2: FIR-generated declarations tagged with GeneratedByPlugin origin
             declaration.origin == IrDeclarationOrigin.GeneratedByPlugin(Slf4jExtensionsPluginKey)
         } else {
-            // K1: synthetic descriptors lowered with DEFINED origin, check descriptor kind
             (declaration.descriptor as? CallableMemberDescriptor)?.kind ==
                 CallableMemberDescriptor.Kind.SYNTHESIZED
         }
@@ -86,8 +88,6 @@ class Slf4jIrTransformer(
     override fun visitProperty(declaration: IrProperty) {
         if (!isPluginGenerated(declaration)) return
         if (declaration.name.asString() != propertyName) return
-        // Note: K2 has a stub initializer from withGeneratedDefaultInitializer(),
-        // K1 has no initializer. Both need to be (re)filled.
 
         val parentClass = declaration.parent as? IrClass ?: return
 
@@ -145,7 +145,7 @@ class Slf4jIrTransformer(
 
         val levelName = declaration.name.asString()
         if (levelName !in LOG_LEVELS) return
-        if (declaration.body != null) return // already has body
+        if (declaration.body != null) return
 
         val regularParams = declaration.parameters.filter {
             it.kind == IrParameterKind.Regular
@@ -155,27 +155,27 @@ class Slf4jIrTransformer(
 
         val logGetter = findLogGetter(parentClass) ?: return
 
-        val isEnabledName =
-            "is${levelName.replaceFirstChar { it.uppercase() }}Enabled"
-        val isEnabledSymbol = context.referenceFunctions(
-            CallableId(loggerClassId, Name.identifier(isEnabledName))
-        ).first { symbol ->
-            symbol.owner.parameters.none { it.kind == IrParameterKind.Regular }
-        }
+        val loggerFunctions = loggerClassSymbol.owner.declarations
+            .filterIsInstance<IrSimpleFunction>()
 
-        val logMethodSymbol = context.referenceFunctions(
-            CallableId(loggerClassId, Name.identifier(levelName))
-        ).first { symbol ->
-            val params = symbol.owner.parameters.filter {
-                it.kind == IrParameterKind.Regular
+        val isEnabledName = "is${levelName.replaceFirstChar { it.uppercase() }}Enabled"
+        val isEnabledSymbol = loggerFunctions
+            .filter { it.name.asString() == isEnabledName }
+            .first { it.parameters.none { p -> p.kind == IrParameterKind.Regular } }
+            .symbol
+
+        val logMethodSymbol = loggerFunctions
+            .filter { it.name.asString() == levelName }
+            .first { func ->
+                val params = func.parameters.filter { it.kind == IrParameterKind.Regular }
+                if (hasThrowable) {
+                    params.size == 2 &&
+                        params[1].type.classOrNull?.owner?.name?.asString() == "Throwable"
+                } else {
+                    params.size == 1
+                }
             }
-            if (hasThrowable) {
-                params.size == 2 &&
-                    params[1].type.classOrNull?.owner?.name?.asString() == "Throwable"
-            } else {
-                params.size == 1
-            }
-        }
+            .symbol
 
         val builder = DeclarationIrBuilder(context, declaration.symbol)
         val dispatchParam = declaration.dispatchReceiverParameter ?: return

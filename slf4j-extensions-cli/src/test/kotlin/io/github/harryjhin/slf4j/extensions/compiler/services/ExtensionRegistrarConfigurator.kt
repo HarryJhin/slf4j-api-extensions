@@ -20,7 +20,6 @@ fun TestConfigurationBuilder.configurePlugin() {
 
 @OptIn(ExperimentalCompilerApi::class)
 class ExtensionRegistrarConfigurator(testServices: TestServices) : EnvironmentConfigurator(testServices) {
-    private val registrar = Slf4jExtensionsCompilerPluginRegistrar()
 
     override fun configureCompilerConfiguration(configuration: CompilerConfiguration, module: TestModule) {
         findJarContaining("org.slf4j.Logger")?.let {
@@ -32,7 +31,7 @@ class ExtensionRegistrarConfigurator(testServices: TestServices) : EnvironmentCo
         module: TestModule,
         configuration: CompilerConfiguration,
     ) {
-        with(registrar) { registerExtensions(configuration) }
+        Slf4jExtensionsCompilerPluginRegistrar.registerExtensions(this, configuration)
     }
 }
 
