@@ -52,13 +52,102 @@ class MarkerExtensionsTest {
     }
 
     @Test
-    fun `error with marker and throwable logs both`() {
+    fun `debug with marker logs message`() {
+        logger.debug(AUDIT) { "audit debug" }
+        val events = logger.loggingEvents
+        assertEquals(1, events.size)
+        assertEquals(Level.DEBUG, events[0].level)
+        assertEquals("audit debug", events[0].message)
+    }
+
+    @Test
+    fun `debug with marker and throwable logs both`() {
         val exception = RuntimeException("boom")
-        logger.error(AUDIT, exception) { "audit error" }
+        logger.debug(AUDIT, exception) { "audit debug error" }
+        val events = logger.loggingEvents
+        assertEquals(1, events.size)
+        assertEquals("audit debug error", events[0].message)
+        assertEquals(exception, events[0].throwable.orElse(null))
+    }
+
+    @Test
+    fun `debug with marker does not evaluate lambda when disabled`() {
+        logger.setEnabledLevels(Level.ERROR)
+        var evaluated = false
+        logger.debug(AUDIT) { evaluated = true; "should not appear" }
+        assertFalse(evaluated)
+    }
+
+    @Test
+    fun `info with marker and throwable logs both`() {
+        val exception = RuntimeException("boom")
+        logger.info(AUDIT, exception) { "audit info error" }
+        val events = logger.loggingEvents
+        assertEquals(1, events.size)
+        assertEquals("audit info error", events[0].message)
+        assertEquals(exception, events[0].throwable.orElse(null))
+    }
+
+    @Test
+    fun `info with marker does not evaluate lambda when disabled`() {
+        logger.setEnabledLevels(Level.ERROR)
+        var evaluated = false
+        logger.info(AUDIT) { evaluated = true; "should not appear" }
+        assertFalse(evaluated)
+    }
+
+    @Test
+    fun `warn with marker logs message`() {
+        logger.warn(AUDIT) { "audit warn" }
+        val events = logger.loggingEvents
+        assertEquals(1, events.size)
+        assertEquals(Level.WARN, events[0].level)
+        assertEquals("audit warn", events[0].message)
+    }
+
+    @Test
+    fun `warn with marker and throwable logs both`() {
+        val exception = RuntimeException("boom")
+        logger.warn(AUDIT, exception) { "audit warn error" }
+        val events = logger.loggingEvents
+        assertEquals(1, events.size)
+        assertEquals("audit warn error", events[0].message)
+        assertEquals(exception, events[0].throwable.orElse(null))
+    }
+
+    @Test
+    fun `warn with marker does not evaluate lambda when disabled`() {
+        logger.setEnabledLevels(Level.ERROR)
+        var evaluated = false
+        logger.warn(AUDIT) { evaluated = true; "should not appear" }
+        assertFalse(evaluated)
+    }
+
+    @Test
+    fun `error with marker logs message`() {
+        logger.error(AUDIT) { "audit error" }
         val events = logger.loggingEvents
         assertEquals(1, events.size)
         assertEquals(Level.ERROR, events[0].level)
         assertEquals("audit error", events[0].message)
+    }
+
+    @Test
+    fun `error with marker and throwable logs both`() {
+        val exception = RuntimeException("boom")
+        logger.error(AUDIT, exception) { "audit error with throwable" }
+        val events = logger.loggingEvents
+        assertEquals(1, events.size)
+        assertEquals(Level.ERROR, events[0].level)
+        assertEquals("audit error with throwable", events[0].message)
         assertEquals(exception, events[0].throwable.orElse(null))
+    }
+
+    @Test
+    fun `error with marker does not evaluate lambda when disabled`() {
+        logger.setEnabledLevels()
+        var evaluated = false
+        logger.error(AUDIT) { evaluated = true; "should not appear" }
+        assertFalse(evaluated)
     }
 }
