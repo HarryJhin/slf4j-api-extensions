@@ -80,6 +80,7 @@ class FirSlf4jDeclarationGenerator(
         ) {
             visibility = Visibilities.Private
             modality = Modality.FINAL
+            withGeneratedDefaultInitializer()
         }
 
         return listOf(property.symbol)

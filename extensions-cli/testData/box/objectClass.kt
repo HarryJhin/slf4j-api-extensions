@@ -1,4 +1,5 @@
 // WITH_STDLIB
+// FULL_JDK
 
 fun box(): String {
     AppLogger.start()
