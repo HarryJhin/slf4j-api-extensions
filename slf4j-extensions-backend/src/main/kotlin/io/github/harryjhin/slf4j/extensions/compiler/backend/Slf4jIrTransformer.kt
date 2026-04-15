@@ -73,19 +73,15 @@ class Slf4jIrTransformer(
     }
 
     @OptIn(ObsoleteDescriptorBasedAPI::class)
-    private fun isPluginGenerated(declaration: IrDeclaration): Boolean {
-        // K2: FIR-generated declarations have GeneratedByPlugin origin
-        val origin = declaration.origin
-        if (origin is IrDeclarationOrigin.GeneratedByPlugin &&
-            origin.pluginKey == Slf4jExtensionsPluginKey
-        ) return true
-        // K1: synthetic descriptors lowered with DEFINED origin, check descriptor kind
-        if (!context.afterK2) {
-            val descriptor = declaration.descriptor as? CallableMemberDescriptor
-            if (descriptor?.kind == CallableMemberDescriptor.Kind.SYNTHESIZED) return true
+    private fun isPluginGenerated(declaration: IrDeclaration): Boolean =
+        if (context.afterK2) {
+            // K2: FIR-generated declarations tagged with GeneratedByPlugin origin
+            declaration.origin == IrDeclarationOrigin.GeneratedByPlugin(Slf4jExtensionsPluginKey)
+        } else {
+            // K1: synthetic descriptors lowered with DEFINED origin, check descriptor kind
+            (declaration.descriptor as? CallableMemberDescriptor)?.kind ==
+                CallableMemberDescriptor.Kind.SYNTHESIZED
         }
-        return false
-    }
 
     override fun visitProperty(declaration: IrProperty) {
         if (!isPluginGenerated(declaration)) return
@@ -95,7 +91,7 @@ class Slf4jIrTransformer(
 
         val parentClass = declaration.parent as? IrClass ?: return
 
-        // K1: backing field may not exist, create it
+        // K1: psi2ir doesn't create backing field for synthetic properties
         if (declaration.backingField == null) {
             val loggerType = declaration.getter?.returnType ?: return
             declaration.backingField = context.irFactory.createField(

@@ -110,6 +110,7 @@ class Slf4jSyntheticResolveExtension(
     ) {
         if (name !in functionNames) return
         if (!shouldGenerateFor(thisDescriptor)) return
+        if (result.isNotEmpty()) return // class already has a function with this name
 
         val builtIns = thisDescriptor.module.builtIns
         val throwableType = builtIns.throwable.defaultType
