@@ -7,4 +7,8 @@ group = "io.github.harryjhin"
 subprojects {
     group = rootProject.group
     version = rootProject.version
+
+    repositories {
+        mavenCentral()
+    }
 }
