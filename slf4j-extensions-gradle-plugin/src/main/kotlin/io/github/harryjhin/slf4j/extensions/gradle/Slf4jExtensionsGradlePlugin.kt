@@ -29,10 +29,10 @@ class Slf4jExtensionsGradlePlugin : KotlinCompilerPluginSupportPlugin {
         val project = kotlinCompilation.target.project
         val extension = project.extensions.getByType(Slf4jExtensionsGradleExtension::class.java)
 
-        // Auto-add runtime dependency
+        // Auto-add runtime dependency (version omitted — resolved via BOM or composite build)
         project.dependencies.add(
             "implementation",
-            "$GROUP_ID:$RUNTIME_ARTIFACT_ID:${project.findProperty("slf4jExtensionsVersion") ?: project.version}",
+            "$GROUP_ID:$RUNTIME_ARTIFACT_ID",
         )
 
         return project.provider {
