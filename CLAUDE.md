@@ -69,10 +69,10 @@ extensions-runtime/    # 사용자 런타임 (Logger/Marker/MDC 확장)
 
 ## Gotchas
 
+- `createMemberProperty`에 `withGeneratedDefaultInitializer()` 필수 — 없으면 FIR→IR 변환에서 프로퍼티 누락 (plugin-sandbox에서 확인)
 - `@DeprecatedForRemovalCompilerApi` — `@OptIn`이나 `@Suppress`로 억제 불가. 반드시 대체 API 사용
 - `IrSymbol.owner` — `@UnsafeDuringIrConstructionAPI` opt-in 필요 (build.gradle.kts에서 전역 설정)
 - `kotlin-compiler` (non-embeddable) vs `kotlin-compiler-embeddable` — 테스트에서는 non-embeddable, 메인 소스에서는 embeddable 사용. 같은 classpath에 공존 불가
-- `createMemberProperty`로 생성한 FIR 프로퍼티가 IR에 나타나지 않는 문제 조사 중 (현재 블로커)
 
 ## Specs & Plans
 
