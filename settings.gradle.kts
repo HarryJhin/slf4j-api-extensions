@@ -4,10 +4,10 @@ plugins {
 
 rootProject.name = "slf4j-extensions"
 
-include(":extensions-common")
-include(":extensions-runtime")
-include(":extensions-k1")
-include(":extensions-k2")
-include(":extensions-backend")
-include(":extensions-cli")
-include(":extensions-compiler")
+include(":slf4j-extensions-common")
+include(":slf4j-extensions-runtime")
+include(":slf4j-extensions-k1")
+include(":slf4j-extensions-k2")
+include(":slf4j-extensions-backend")
+include(":slf4j-extensions-cli")
+include(":slf4j-extensions-compiler")

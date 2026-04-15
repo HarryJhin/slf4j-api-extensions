@@ -3,13 +3,13 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":extensions-common"))
-    implementation(project(":extensions-k1"))
-    implementation(project(":extensions-k2"))
-    implementation(project(":extensions-backend"))
+    implementation(project(":slf4j-extensions-common"))
+    implementation(project(":slf4j-extensions-k1"))
+    implementation(project(":slf4j-extensions-k2"))
+    implementation(project(":slf4j-extensions-backend"))
     compileOnly("org.jetbrains.kotlin:kotlin-compiler-embeddable")
 
-    testImplementation(project(":extensions-runtime"))
+    testImplementation(project(":slf4j-extensions-runtime"))
     testImplementation("org.jetbrains.kotlin:kotlin-compiler:2.3.20")
     testImplementation("org.jetbrains.kotlin:kotlin-compiler-internal-test-framework:2.3.20")
     testImplementation(kotlin("test"))

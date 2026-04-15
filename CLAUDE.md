@@ -9,15 +9,15 @@ Kotlin compiler plugin that automatically injects SLF4J Logger and logging funct
 ./gradlew clean build
 
 # Test runtime module only (38 tests)
-./gradlew :extensions-runtime:test
+./gradlew :slf4j-extensions-runtime:test
 
 # Test compiler plugin (box tests)
-./gradlew :extensions-cli:test
+./gradlew :slf4j-extensions-cli:test
 
 # Compile specific module
-./gradlew :extensions-k2:compileKotlin
-./gradlew :extensions-backend:compileKotlin
-./gradlew :extensions-cli:compileKotlin
+./gradlew :slf4j-extensions-k2:compileKotlin
+./gradlew :slf4j-extensions-backend:compileKotlin
+./gradlew :slf4j-extensions-cli:compileKotlin
 ```
 
 ## Architecture
@@ -25,23 +25,23 @@ Kotlin compiler plugin that automatically injects SLF4J Logger and logging funct
 멀티모듈 Gradle 프로젝트 (Kotlin 2.3.20):
 
 ```
-extensions-common/     # 공유 상수 (PluginKey, ConfigKeys, PluginNames)
-extensions-k1/         # K1 프론트엔드 (SyntheticResolveExtension) — stub
-extensions-k2/         # K2 FIR 프론트엔드 (FirDeclarationGenerationExtension)
-extensions-backend/    # IR 변환 (IrVisitorVoid 기반)
-extensions-cli/        # 진입점 (CommandLineProcessor + CompilerPluginRegistrar)
-extensions-compiler/   # Fat JAR 패키징
-extensions-runtime/    # 사용자 런타임 (Logger/Marker/MDC 확장)
+slf4j-extensions-common/     # 공유 상수 (PluginKey, ConfigKeys, PluginNames)
+slf4j-extensions-k1/         # K1 프론트엔드 (SyntheticResolveExtension) — stub
+slf4j-extensions-k2/         # K2 FIR 프론트엔드 (FirDeclarationGenerationExtension)
+slf4j-extensions-backend/    # IR 변환 (IrVisitorVoid 기반)
+slf4j-extensions-cli/        # 진입점 (CommandLineProcessor + CompilerPluginRegistrar)
+slf4j-extensions-compiler/   # Fat JAR 패키징
+slf4j-extensions-runtime/    # 사용자 런타임 (Logger/Marker/MDC 확장)
 ```
 
 **의존 방향**: cli → {k1, k2, backend} → common. runtime은 독립.
 
 ## Key Files
 
-- `extensions-k2/src/main/kotlin/io/github/harryjhin/slf4j/extensions/compiler/k2/FirSlf4jDeclarationGenerator.kt` — FIR에서 log 프로퍼티 + 10개 함수 선언
-- `extensions-backend/src/main/kotlin/io/github/harryjhin/slf4j/extensions/compiler/backend/Slf4jIrTransformer.kt` — IR에서 함수 body 채우기
-- `extensions-cli/src/main/kotlin/io/github/harryjhin/slf4j/extensions/compiler/cli/Slf4jExtensionsCompilerPluginRegistrar.kt` — K2 FIR + IR 확장 등록
-- `extensions-runtime/src/main/kotlin/io/github/harryjhin/slf4j/extensions/LoggerExtensions.kt` — inline fun Logger.trace/debug/info/warn/error
+- `slf4j-extensions-k2/src/main/kotlin/io/github/harryjhin/slf4j/extensions/compiler/k2/FirSlf4jDeclarationGenerator.kt` — FIR에서 log 프로퍼티 + 10개 함수 선언
+- `slf4j-extensions-backend/src/main/kotlin/io/github/harryjhin/slf4j/extensions/compiler/backend/Slf4jIrTransformer.kt` — IR에서 함수 body 채우기
+- `slf4j-extensions-cli/src/main/kotlin/io/github/harryjhin/slf4j/extensions/compiler/cli/Slf4jExtensionsCompilerPluginRegistrar.kt` — K2 FIR + IR 확장 등록
+- `slf4j-extensions-runtime/src/main/kotlin/io/github/harryjhin/slf4j/extensions/LoggerExtensions.kt` — inline fun Logger.trace/debug/info/warn/error
 
 ## Environment
 

@@ -7,11 +7,11 @@ val embedded by configurations.creating {
 }
 
 dependencies {
-    embedded(project(":extensions-common"))
-    embedded(project(":extensions-k1"))
-    embedded(project(":extensions-k2"))
-    embedded(project(":extensions-backend"))
-    embedded(project(":extensions-cli"))
+    embedded(project(":slf4j-extensions-common"))
+    embedded(project(":slf4j-extensions-k1"))
+    embedded(project(":slf4j-extensions-k2"))
+    embedded(project(":slf4j-extensions-backend"))
+    embedded(project(":slf4j-extensions-cli"))
 }
 
 tasks.jar {
