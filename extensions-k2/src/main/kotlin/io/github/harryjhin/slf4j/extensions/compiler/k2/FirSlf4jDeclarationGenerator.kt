@@ -109,6 +109,7 @@ class FirSlf4jDeclarationGenerator(
         ) {
             visibility = Visibilities.Private
             modality = Modality.FINAL
+            status { isInline = true }
             valueParameter(Name.identifier("message"), function0OfString)
         }
         results += simpleFunc.symbol
@@ -122,6 +123,7 @@ class FirSlf4jDeclarationGenerator(
         ) {
             visibility = Visibilities.Private
             modality = Modality.FINAL
+            status { isInline = true }
             valueParameter(Name.identifier("throwable"), throwableType)
             valueParameter(Name.identifier("message"), function0OfString)
         }
