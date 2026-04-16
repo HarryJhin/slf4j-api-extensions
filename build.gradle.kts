@@ -91,7 +91,6 @@ configure(listOf(
 configure(listOf(
     project(":slf4j-extensions-common"),
     project(":slf4j-extensions-k1"),
-    project(":slf4j-extensions-k2"),
     project(":slf4j-extensions-backend"),
     project(":slf4j-extensions-cli"),
 )) {
@@ -99,7 +98,6 @@ configure(listOf(
         extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
             compilerOptions {
                 optIn.add("org.jetbrains.kotlin.compiler.plugin.ExperimentalCompilerApi")
-                optIn.add("org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI")
             }
         }
     }

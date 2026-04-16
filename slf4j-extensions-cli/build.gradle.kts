@@ -7,7 +7,6 @@ val kotlinVersion: String by project
 dependencies {
     implementation(project(":slf4j-extensions-common"))
     implementation(project(":slf4j-extensions-k1"))
-    implementation(project(":slf4j-extensions-k2"))
     implementation(project(":slf4j-extensions-backend"))
     compileOnly("org.jetbrains.kotlin:kotlin-compiler-embeddable")
 

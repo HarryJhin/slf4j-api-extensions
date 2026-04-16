@@ -9,7 +9,6 @@ val embedded by configurations.creating {
 dependencies {
     embedded(project(":slf4j-extensions-common"))
     embedded(project(":slf4j-extensions-k1"))
-    embedded(project(":slf4j-extensions-k2"))
     embedded(project(":slf4j-extensions-backend"))
     embedded(project(":slf4j-extensions-cli"))
 }
