@@ -24,6 +24,13 @@ configure(listOf(
     apply(plugin = "maven-publish")
     apply(plugin = "signing")
 
+    pluginManager.withPlugin("java") {
+        extensions.configure<JavaPluginExtension> {
+            withSourcesJar()
+            withJavadocJar()
+        }
+    }
+
     afterEvaluate {
         publishing {
             publications {
