@@ -61,13 +61,10 @@ configure(listOf(
             repositories {
                 maven {
                     name = "sonatype"
-                    url = uri(
-                        findProperty("deploy-url")?.toString()
-                            ?: "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
-                    )
+                    url = uri("https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/")
                     credentials {
-                        username = findProperty("deploy-username")?.toString()
-                        password = findProperty("deploy-password")?.toString()
+                        username = findProperty("mavenCentralUsername")?.toString()
+                        password = findProperty("mavenCentralPassword")?.toString()
                     }
                 }
             }
@@ -77,11 +74,10 @@ configure(listOf(
             val signingRequired = !version.toString().contains("-SNAPSHOT")
             isRequired = signingRequired
             if (signingRequired) {
-                val signKeyId = findProperty("signKeyId")?.toString()
-                val signKeyPrivate = findProperty("signKeyPrivate")?.toString()
-                val signKeyPassphrase = findProperty("signKeyPassphrase")?.toString()
-                if (!signKeyId.isNullOrBlank()) {
-                    useInMemoryPgpKeys(signKeyId, signKeyPrivate, signKeyPassphrase)
+                val key = findProperty("signingInMemoryKey")?.toString()
+                val password = findProperty("signingInMemoryKeyPassword")?.toString()
+                if (!key.isNullOrBlank()) {
+                    useInMemoryPgpKeys(key, password)
                 } else {
                     useGpgCmd()
                 }
