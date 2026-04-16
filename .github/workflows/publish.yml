@@ -1,39 +1,48 @@
-name: Publish to Sonatype
+name: Publish
 
 on:
   workflow_dispatch:
   push:
-    branches: [ "master" ]
+    tags: ["v*"]
 
 jobs:
   publish:
-    environment:
-      name: maven
+    environment: maven
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      packages: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bfd976089dd991e2582 # v4.0.0
-      - name: Verify release & deploy configuration
-        run: ./gradlew jreleaserConfig
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: temuion
+          cache: gradle
+
+      - uses: gradle/actions/wrapper-validation@v4
+
+      - name: Run tests
+        run: ./gradlew check
+
+      - name: Publish to Maven Central
+        run: ./gradlew publish
         env:
-          JRELEASER_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-          JRELEASER_GPG_PUBLIC_KEY: ${{ secrets.GPG_PUBLIC_KEY }}
-          JRELEASER_GPG_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
-          JRELEASER_MAVENCENTRAL_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          JRELEASER_MAVENCENTRAL_TOKEN: ${{ secrets.SONATYPE_PASSWORD }}
-          JRELEASER_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish to Sonatype
-        run: ./gradlew publish jreleaserFullRelease --stacktrace
+          ORG_GRADLE_PROJECT_deploy-url: https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/
+          ORG_GRADLE_PROJECT_deploy-username: ${{ secrets.SONATYPE_USERNAME }}
+          ORG_GRADLE_PROJECT_deploy-password: ${{ secrets.SONATYPE_PASSWORD }}
+          ORG_GRADLE_PROJECT_signKeyId: ${{ secrets.SIGN_KEY_ID }}
+          ORG_GRADLE_PROJECT_signKeyPrivate: ${{ secrets.SIGN_KEY_PRIVATE }}
+          ORG_GRADLE_PROJECT_signKeyPassphrase: ${{ secrets.SIGN_KEY_PASSPHRASE }}
+
+      - name: Publish to Gradle Plugin Portal
+        run: ./gradlew :slf4j-extensions-gradle-plugin:publishPlugins
         env:
-          JRELEASER_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-          JRELEASER_GPG_PUBLIC_KEY: ${{ secrets.GPG_PUBLIC_KEY }}
-          JRELEASER_GPG_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
-          JRELEASER_MAVENCENTRAL_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          JRELEASER_MAVENCENTRAL_TOKEN: ${{ secrets.SONATYPE_PASSWORD }}
-          JRELEASER_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GRADLE_PUBLISH_KEY: ${{ secrets.GRADLE_PUBLISH_KEY }}
+          GRADLE_PUBLISH_SECRET: ${{ secrets.GRADLE_PUBLISH_SECRET }}
+
+      - name: Create GitHub Release
+        run: gh release create ${{ github.ref_name }} --generate-notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

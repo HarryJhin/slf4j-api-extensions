@@ -1,5 +1,7 @@
 plugins {
     kotlin("jvm") apply false
+    `maven-publish`
+    signing
 }
 
 group = "io.github.harryjhin"
@@ -10,6 +12,75 @@ subprojects {
 
     repositories {
         mavenCentral()
+    }
+}
+
+// Publishing configuration for distributable modules
+configure(listOf(
+    project(":slf4j-extensions-runtime"),
+    project(":slf4j-extensions-compiler"),
+    project(":slf4j-extensions-gradle-plugin"),
+)) {
+    apply(plugin = "maven-publish")
+    apply(plugin = "signing")
+
+    afterEvaluate {
+        publishing {
+            publications {
+                create<MavenPublication>("maven") {
+                    from(components["java"])
+                    pom {
+                        name.set(project.name)
+                        description.set("Kotlin compiler plugin that injects SLF4J Logger into classes")
+                        url.set("https://github.com/HarryJhin/slf4j-api-extensions")
+                        licenses {
+                            license {
+                                name.set("MIT License")
+                                url.set("https://opensource.org/licenses/MIT")
+                            }
+                        }
+                        developers {
+                            developer {
+                                id.set("HarryJhin")
+                                name.set("주진현")
+                            }
+                        }
+                        scm {
+                            url.set("https://github.com/HarryJhin/slf4j-api-extensions")
+                        }
+                    }
+                }
+            }
+            repositories {
+                maven {
+                    name = "sonatype"
+                    url = uri(
+                        findProperty("deploy-url")?.toString()
+                            ?: "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+                    )
+                    credentials {
+                        username = findProperty("deploy-username")?.toString()
+                        password = findProperty("deploy-password")?.toString()
+                    }
+                }
+            }
+        }
+
+        signing {
+            val signingRequired = !version.toString().contains("-SNAPSHOT")
+            isRequired = signingRequired
+            if (signingRequired) {
+                val signKeyId = findProperty("signKeyId")?.toString()
+                val signKeyPrivate = findProperty("signKeyPrivate")?.toString()
+                val signKeyPassphrase = findProperty("signKeyPassphrase")?.toString()
+                if (!signKeyId.isNullOrBlank()) {
+                    useInMemoryPgpKeys(signKeyId, signKeyPrivate, signKeyPassphrase)
+                } else {
+                    useGpgCmd()
+                }
+                sign(publishing.publications["maven"])
+            }
+        }
     }
 }
 
