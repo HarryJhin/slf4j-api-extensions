@@ -6,26 +6,22 @@ import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.PropertyDescriptor
-import org.jetbrains.kotlin.descriptors.SimpleFunctionDescriptor
 import org.jetbrains.kotlin.descriptors.annotations.Annotations
 import org.jetbrains.kotlin.descriptors.findClassAcrossModuleDependencies
 import org.jetbrains.kotlin.descriptors.impl.PropertyDescriptorImpl
 import org.jetbrains.kotlin.descriptors.impl.PropertyGetterDescriptorImpl
-import org.jetbrains.kotlin.descriptors.impl.SimpleFunctionDescriptorImpl
-import org.jetbrains.kotlin.descriptors.impl.ValueParameterDescriptorImpl
-import org.jetbrains.kotlin.name.Name
-import org.jetbrains.kotlin.resolve.descriptorUtil.builtIns
 import org.jetbrains.kotlin.resolve.descriptorUtil.module
-import org.jetbrains.kotlin.types.KotlinTypeFactory
-import org.jetbrains.kotlin.types.TypeAttributes
-import org.jetbrains.kotlin.types.TypeProjectionImpl
 
 /**
- * Builds K1 descriptors for the Companion-level `log` property and the level functions.
+ * Builds the K1 descriptor for the Companion/object-level `log: Logger` property.
  *
- * Visibility is [DescriptorVisibilities.INTERNAL] — Lombok-like semantics: the API is intra-module
- * only. Callers use the synthesized `info { }` / `error(e) { }` from inside the enclosing class
- * body; the `log` handle is not part of the public surface.
+ * Level functions are no longer synthesized as Companion members — they live as runtime
+ * inline extensions in `slf4j-ktx-core`, and the backend IR pass rewrites call sites to hit
+ * the `log` backing field directly (see `Slf4jKtxIrGenerator`).
+ *
+ * Visibility is [DescriptorVisibilities.INTERNAL] — Lombok-like semantics: the handle is
+ * intra-module only. The primary API surface is the `info { }` / `error(e) { }` extension
+ * shape exposed by the runtime library.
  */
 internal object Slf4jKtxDescriptorResolver {
 
@@ -67,65 +63,5 @@ internal object Slf4jKtxDescriptorResolver {
         getter.initialize(loggerType)
         property.initialize(getter, null)
         return property
-    }
-
-    /**
-     * Creates one overload of `<level>(message: () -> String)` or
-     * `<level>(throwable: Throwable, message: () -> String)`. Both return `Unit`.
-     *
-     * @param owner the Companion object or a triggered standalone object (the descriptor that
-     *   will host the function)
-     * @param name one of trace/debug/info/warn/error
-     * @param throwable true for the Throwable-aware overload
-     */
-    fun createLevelFunction(owner: ClassDescriptor, name: Name, throwable: Boolean): SimpleFunctionDescriptor {
-        val builtIns = owner.builtIns
-        val unitType = builtIns.unitType
-        val stringType = builtIns.stringType
-        val throwableType = builtIns.throwable.defaultType
-        val function0OfString = KotlinTypeFactory.simpleNotNullType(
-            TypeAttributes.Empty,
-            builtIns.getFunction(0),
-            listOf(TypeProjectionImpl(stringType)),
-        )
-
-        val fn = SimpleFunctionDescriptorImpl.create(
-            owner,
-            Annotations.EMPTY,
-            name,
-            CallableMemberDescriptor.Kind.SYNTHESIZED,
-            owner.source,
-        )
-        val params = buildList {
-            var index = 0
-            if (throwable) {
-                add(
-                    ValueParameterDescriptorImpl(
-                        fn, null, index++, Annotations.EMPTY,
-                        Name.identifier("throwable"), throwableType,
-                        false, false, false, null, owner.source,
-                    )
-                )
-            }
-            add(
-                ValueParameterDescriptorImpl(
-                    fn, null, index, Annotations.EMPTY,
-                    Name.identifier("message"), function0OfString,
-                    false, false, false, null, owner.source,
-                )
-            )
-        }
-        fn.initialize(
-            null,                              // extensionReceiverParameter
-            owner.thisAsReceiverParameter,     // dispatchReceiverParameter
-            emptyList(),                       // contextReceiverParameters
-            emptyList(),                       // typeParameters
-            params,                            // valueParameters
-            unitType,                          // returnType
-            Modality.FINAL,
-            DescriptorVisibilities.INTERNAL,
-        )
-        fn.setReturnType(unitType)
-        return fn
     }
 }

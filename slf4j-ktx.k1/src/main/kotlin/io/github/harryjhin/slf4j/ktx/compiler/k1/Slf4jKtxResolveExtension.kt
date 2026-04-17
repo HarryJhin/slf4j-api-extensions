@@ -5,22 +5,26 @@ import io.github.harryjhin.slf4j.ktx.compiler.Slf4jKtxEntityNames
 import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.PropertyDescriptor
-import org.jetbrains.kotlin.descriptors.SimpleFunctionDescriptor
-import org.jetbrains.kotlin.descriptors.findClassAcrossModuleDependencies
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.name.SpecialNames
 import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.descriptorUtil.module
 import org.jetbrains.kotlin.resolve.extensions.SyntheticResolveExtension
 
 /**
- * K1 frontend entry point. Companion-centric synthesis:
- *  - triggered class lacking a Companion → announce one via [getSyntheticCompanionObjectNameIfNeeded]
- *  - the Companion (or the triggered standalone object) hosts `log` + 5 level × 2 overload functions
+ * K1 frontend entry point. Responsibilities (after the IR-rewriting refactor):
+ *  - Announce a Companion on triggered classes that lack one ([getSyntheticCompanionObjectNameIfNeeded]).
+ *  - Synthesize the single `log: Logger` property on the generation site (Companion of a
+ *    triggered class, or the triggered standalone object itself).
  *
- * Collision policy: if the user has already declared a member with the same name on the generation
- * site, the plugin silently skips that name (`result.isNotEmpty() → return`). Matches
- * kotlinx-serialization's SerializationResolveExtension behavior.
+ * Level functions (`trace/debug/info/warn/error`) are **NOT** synthesized here anymore. They
+ * live as `T.trace/.../.error × 2` top-level inline extensions in `slf4j-ktx-core`. The
+ * compiler plugin's backend IR pass rewrites every call site that targets a triggered class
+ * into a direct `Companion.log.<level>(...)` access, eliminating both the reflection fallback
+ * and the need for IDE-side synthetic-member resolution. See `Slf4jKtxIrGenerator`.
+ *
+ * Collision policy: if the user has declared their own `log` member on the generation site,
+ * the plugin silently skips synthesis (`result.isNotEmpty() → return`). The user's property is
+ * used by the IR rewriter so long as its name matches `log`.
  */
 class Slf4jKtxResolveExtension(
     private val config: Slf4jKtxConfig,
@@ -41,10 +45,6 @@ class Slf4jKtxResolveExtension(
         if (isGenerationSite(thisDescriptor)) listOf(Slf4jKtxEntityNames.LOG_PROPERTY_ID)
         else emptyList()
 
-    override fun getSyntheticFunctionNames(thisDescriptor: ClassDescriptor): List<Name> =
-        if (isGenerationSite(thisDescriptor)) Slf4jKtxEntityNames.LOG_LEVEL_NAMES
-        else emptyList()
-
     override fun generateSyntheticProperties(
         thisDescriptor: ClassDescriptor,
         name: Name,
@@ -57,23 +57,6 @@ class Slf4jKtxResolveExtension(
         if (result.isNotEmpty()) return                                     // user-declared — skip
         val property = Slf4jKtxDescriptorResolver.createLogProperty(thisDescriptor) ?: return
         result += property
-    }
-
-    override fun generateSyntheticMethods(
-        thisDescriptor: ClassDescriptor,
-        name: Name,
-        bindingContext: BindingContext,
-        fromSupertypes: List<SimpleFunctionDescriptor>,
-        result: MutableCollection<SimpleFunctionDescriptor>,
-    ) {
-        if (name !in Slf4jKtxEntityNames.LOG_LEVEL_NAME_SET) return
-        if (!isGenerationSite(thisDescriptor)) return
-        if (result.isNotEmpty()) return                                     // user-declared — skip
-        // Mirror the Logger-presence guard in createLogProperty: do not emit level functions whose
-        // bodies would dereference a missing `log`.
-        if (thisDescriptor.module.findClassAcrossModuleDependencies(Slf4jKtxEntityNames.LOGGER_CLASS_ID) == null) return
-        result += Slf4jKtxDescriptorResolver.createLevelFunction(thisDescriptor, name, throwable = false)
-        result += Slf4jKtxDescriptorResolver.createLevelFunction(thisDescriptor, name, throwable = true)
     }
 
     /** Companion of a triggered class, or the triggered object itself. */

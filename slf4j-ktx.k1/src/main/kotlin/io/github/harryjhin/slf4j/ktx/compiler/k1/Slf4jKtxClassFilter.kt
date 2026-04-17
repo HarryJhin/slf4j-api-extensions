@@ -10,13 +10,20 @@ import org.jetbrains.kotlin.resolve.DescriptorUtils
 import org.jetbrains.kotlin.resolve.descriptorUtil.module
 
 /**
- * Decides whether the plugin should generate Companion members for a class.
+ * Shared trigger predicate for the K1 frontend. Decides whether the plugin should treat a
+ * given class/object as a generation + call-rewrite site — i.e. whether to synthesize the
+ * Companion's `log` property on it (via [Slf4jKtxResolveExtension]) and whether the IR pass
+ * should redirect runtime-extension calls made against it to that property.
  *
  * Rules:
  *  - interfaces and annotation classes: skip (no useful logger surface)
  *  - local / anonymous classes: skip (generic enclosing IR linkage is fragile)
  *  - otherwise: class must carry a trigger annotation directly OR one of its annotations must
- *    itself be annotated with a trigger (flat 1-hop metaAnnotated, matching FirSerializationPredicates)
+ *    itself be annotated with a trigger (flat 1-hop meta-annotation, matching the semantics
+ *    of `FirSerializationPredicates.metaAnnotated(..., includeItself = false)`).
+ *
+ * Must stay semantically aligned with `FirSlf4jKtxClassFilter` on the K2 side so the two
+ * frontends agree on which classes are triggered.
  */
 internal object Slf4jKtxClassFilter {
 

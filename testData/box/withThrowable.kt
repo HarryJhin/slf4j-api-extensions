@@ -1,7 +1,7 @@
 // WITH_STDLIB
 // FULL_JDK
 
-import io.github.harryjhin.slf4j.ktx.Slf4j
+import io.github.harryjhin.slf4j.ktx.*
 
 fun box(): String {
     Handler().handle(RuntimeException("boom"))

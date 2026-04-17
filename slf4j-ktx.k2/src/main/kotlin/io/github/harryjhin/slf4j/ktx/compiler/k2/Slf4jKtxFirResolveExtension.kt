@@ -16,7 +16,6 @@ import org.jetbrains.kotlin.fir.extensions.MemberGenerationContext
 import org.jetbrains.kotlin.fir.extensions.NestedClassGenerationContext
 import org.jetbrains.kotlin.fir.plugin.createCompanionObject
 import org.jetbrains.kotlin.fir.plugin.createDefaultPrivateConstructor
-import org.jetbrains.kotlin.fir.plugin.createMemberFunction
 import org.jetbrains.kotlin.fir.plugin.createMemberProperty
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassLikeSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassSymbol
@@ -29,17 +28,21 @@ import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.name.SpecialNames
 
 /**
- * K2 FIR entry point — Companion-centric synthesis.
+ * K2 FIR entry point. Responsibilities (after the IR-rewriting refactor):
  *
  *  - Triggered class lacking a Companion: announce one via [getNestedClassifiersNames] and
  *    emit it in [generateNestedClassLikeDeclaration].
- *  - Companion of a triggered class OR triggered standalone `object`: host `log` + 5 level × 2
- *    overload functions.
+ *  - Companion of a triggered class OR triggered standalone `object`: host the single
+ *    `log: Logger` property.
+ *  - Emit the Companion's primary constructor (plugin-synthesized Companions need one; see
+ *    [generateConstructors]).
  *
- * Collision policy (silent skip, matching SerializationResolveExtension):
- *  - Names already declared on the generation site are excluded in [getCallableNamesForClass].
- *  - Belt-and-braces: [generateProperties]/[generateFunctions] also check existing declarations
- *    in case the name was contributed after [getCallableNamesForClass] was consulted.
+ * Level functions (`trace/debug/info/warn/error`) live as `T.trace/…/.error × 2` top-level
+ * inline extensions in `slf4j-ktx-core`. The backend IR pass rewrites every call site targeting
+ * a triggered class into a direct `Companion.log.<level>(...)` access. See `Slf4jKtxIrGenerator`.
+ *
+ * Collision policy: names already declared on the generation site are excluded in
+ * [getCallableNamesForClass].
  */
 class Slf4jKtxFirResolveExtension(
     session: FirSession,
@@ -133,47 +136,6 @@ class Slf4jKtxFirResolveExtension(
             modality = Modality.FINAL
         }
         return listOf(property.symbol)
-    }
-
-    override fun generateFunctions(
-        callableId: CallableId,
-        context: MemberGenerationContext?,
-    ): List<FirNamedFunctionSymbol> {
-        if (callableId.callableName !in Slf4jKtxEntityNames.LOG_LEVEL_NAME_SET) return emptyList()
-        val owner = context?.owner ?: return emptyList()
-        if (!isGenerationSite(owner)) return emptyList()
-        if (owner.declarationSymbols.any { it is FirNamedFunctionSymbol && it.name == callableId.callableName }) {
-            return emptyList()
-        }
-
-        val unitType = session.builtinTypes.unitType.type
-        val stringType = FirSlf4jKtxUtils.resolveType(session, FirSlf4jKtxUtils.STRING_CLASS_ID) ?: return emptyList()
-        val throwableType = FirSlf4jKtxUtils.resolveType(session, FirSlf4jKtxUtils.THROWABLE_CLASS_ID) ?: return emptyList()
-        val function0OfString = FirSlf4jKtxUtils.createFunction0Type(stringType)
-
-        return listOf(
-            createMemberFunction(
-                owner = owner,
-                key = Slf4jKtxPluginKey,
-                name = callableId.callableName,
-                returnType = unitType,
-            ) {
-                visibility = Visibilities.Internal
-                modality = Modality.FINAL
-                valueParameter(Name.identifier("message"), function0OfString)
-            }.symbol,
-            createMemberFunction(
-                owner = owner,
-                key = Slf4jKtxPluginKey,
-                name = callableId.callableName,
-                returnType = unitType,
-            ) {
-                visibility = Visibilities.Internal
-                modality = Modality.FINAL
-                valueParameter(Name.identifier("throwable"), throwableType)
-                valueParameter(Name.identifier("message"), function0OfString)
-            }.symbol,
-        )
     }
 
     /** Companion of a triggered class, or the triggered object itself. */

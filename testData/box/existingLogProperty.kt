@@ -1,7 +1,7 @@
 // WITH_STDLIB
 // FULL_JDK
 
-import io.github.harryjhin.slf4j.ktx.Slf4j
+import io.github.harryjhin.slf4j.ktx.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 

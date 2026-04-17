@@ -1,105 +1,134 @@
 package io.github.harryjhin.slf4j.ktx.compiler.backend
 
 import io.github.harryjhin.slf4j.ktx.compiler.Slf4jKtxEntityNames
+import org.jetbrains.kotlin.backend.common.IrElementTransformerVoidWithContext
 import org.jetbrains.kotlin.backend.common.lower.DeclarationIrBuilder
+import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
-import org.jetbrains.kotlin.ir.IrElement
-import org.jetbrains.kotlin.ir.builders.irBlockBody
+import org.jetbrains.kotlin.ir.IrStatement
+import org.jetbrains.kotlin.ir.builders.irBlock
 import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irExprBody
 import org.jetbrains.kotlin.ir.builders.irGet
 import org.jetbrains.kotlin.ir.builders.irGetField
+import org.jetbrains.kotlin.ir.builders.irGetObject
 import org.jetbrains.kotlin.ir.builders.irIfThen
 import org.jetbrains.kotlin.ir.builders.irString
 import org.jetbrains.kotlin.ir.builders.irTemporary
 import org.jetbrains.kotlin.ir.declarations.IrClass
-import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
-import org.jetbrains.kotlin.ir.declarations.IrFile
-import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrPackageFragment
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.expressions.IrCall
+import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.impl.IrFieldSymbolImpl
 import org.jetbrains.kotlin.ir.types.classOrNull
+import org.jetbrains.kotlin.ir.util.companionObject
 import org.jetbrains.kotlin.ir.util.kotlinFqName
-import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
-import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 
 /**
- * Fills bodies for the plugin-generated Companion/object members:
- *  - `log` property: ensures a backing field, installs a `LoggerFactory.getLogger(FQN)`
- *    initializer, and a `irGetField` getter body.
- *  - level functions (`trace/debug/info/warn/error` × 2 overloads): installs
- *    `if (log.isXxxEnabled) log.xxx(message.invoke() [, throwable])`.
+ * Backend IR transformer with two responsibilities:
  *
- * Works uniformly for Companion and standalone `@Slf4j object` — the only semantic difference
- * is the logger name resolution in [loggerNameFor].
+ *  1. **Fill `log: Logger` property bodies** on plugin-synthesized Companion/object sites.
+ *     The K1/K2 frontends declare the property; we install the backing field, the
+ *     `LoggerFactory.getLogger(FQN)` initializer, and the trivial getter body.
+ *
+ *  2. **Rewrite call sites** to `io.github.harryjhin.slf4j.ktx.<level>()` runtime extensions
+ *     when the extension receiver's class carries a plugin-synthesized `log`. The rewrite
+ *     produces the equivalent of:
+ *     ```kotlin
+ *     val tmp = Foo.Companion.log
+ *     if (tmp.isXxxEnabled) tmp.xxx(message.invoke() [, throwable])
+ *     ```
+ *     No [org.slf4j.LoggerFactory.getLogger] call, no reflection — a direct static-field
+ *     read. Classes without plugin-synthesized `log` fall through to the runtime extension's
+ *     default body, which performs a `LoggerFactory.getLogger(T::class.java)` cache lookup
+ *     (the fallback path).
+ *
+ * IDE resolves the extension calls against `slf4j-ktx-core` regardless; the IR rewrite is
+ * purely a backend optimization, invisible to the frontend.
  */
 @Suppress("DEPRECATION")
 internal class Slf4jKtxIrGenerator(
     private val ctx: Slf4jKtxPluginContext,
-) : IrElementVisitorVoid {
+) : IrElementTransformerVoidWithContext() {
 
-    override fun visitElement(element: IrElement) {
-        when (element) {
-            is IrDeclaration, is IrFile, is IrModuleFragment -> element.acceptChildrenVoid(this)
-            else -> Unit
+    override fun visitClassNew(declaration: IrClass): IrStatement {
+        for (decl in declaration.declarations) {
+            if (decl is IrProperty
+                && decl.isFromPlugin(ctx.afterK2)
+                && decl.name == Slf4jKtxEntityNames.LOG_PROPERTY_ID
+            ) {
+                val site = decl.parent as? IrClass ?: continue
+                ensureBackingField(decl, site)
+                fillInitializer(decl, site)
+                fillGetterBody(decl)
+            }
         }
+        return super.visitClassNew(declaration)
     }
 
-    override fun visitProperty(declaration: IrProperty) {
-        if (!declaration.isFromPlugin(ctx.afterK2)) return
-        if (declaration.name != Slf4jKtxEntityNames.LOG_PROPERTY_ID) return
-        val site = declaration.parent as? IrClass ?: return
-
-        ensureBackingField(declaration, site)
-        fillInitializer(declaration, site)
-        fillGetterBody(declaration)
+    override fun visitCall(expression: IrCall): IrExpression {
+        val rewritten = maybeRewriteLevelCall(expression)
+        return rewritten ?: super.visitCall(expression)
     }
 
-    override fun visitSimpleFunction(declaration: IrSimpleFunction) {
-        if (!declaration.isFromPlugin(ctx.afterK2)) return
-        val levelName = declaration.name.asString()
-        if (levelName !in LOG_LEVEL_STRINGS) return
-        if (declaration.body != null) return
+    /**
+     * Returns the rewritten expression when [expression] targets one of our runtime level
+     * extensions AND the receiver's class hosts a plugin-generated `log`. Otherwise null —
+     * the caller falls through to the runtime extension's default body.
+     */
+    private fun maybeRewriteLevelCall(expression: IrCall): IrExpression? {
+        val callee = expression.symbol.owner
+        val fqName = callee.kotlinFqName
+        if (fqName.parent() != Slf4jKtxEntityNames.LOGGER_EXTENSIONS_PACKAGE) return null
+        val levelName = fqName.shortName().asString()
+        if (levelName !in LOG_LEVEL_STRINGS) return null
 
-        val site = declaration.parent as? IrClass ?: return
-        val logGetter = findLogGetter(site) ?: return
-        val dispatchParam = declaration.dispatchReceiverParameter ?: return
+        val extReceiver = expression.extensionReceiver ?: return null
+        val receiverClass = extReceiver.type.classOrNull?.owner ?: return null
 
-        val regularParams = declaration.valueParameters
-        val hasThrowable = regularParams.size == 2
-        val messageParam = regularParams.last()
+        // @Slf4j object uses the object itself as the log host; classes use their Companion.
+        val logSite: IrClass = when {
+            receiverClass.kind == ClassKind.OBJECT && !receiverClass.isCompanion -> receiverClass
+            else -> receiverClass.companionObject() ?: return null
+        }
 
+        val logProperty = logSite.declarations.filterIsInstance<IrProperty>()
+            .firstOrNull { it.name == Slf4jKtxEntityNames.LOG_PROPERTY_ID } ?: return null
+        val logField = logProperty.backingField ?: return null
+
+        val argCount = expression.valueArgumentsCount
+        val hasThrowable = argCount == 2
+        val messageLambda = expression.getValueArgument(if (hasThrowable) 1 else 0) ?: return null
+        val throwableArg = if (hasThrowable) expression.getValueArgument(0) else null
+
+        val scopeSymbol = currentScope?.scope?.scopeOwnerSymbol ?: return null
+        val builder = DeclarationIrBuilder(ctx, scopeSymbol, expression.startOffset, expression.endOffset)
         val isEnabledSymbol = resolveIsEnabled(levelName)
         val logMethodSymbol = resolveLogMethod(levelName, hasThrowable)
 
-        val builder = DeclarationIrBuilder(ctx, declaration.symbol)
-        declaration.body = builder.irBlockBody {
-            val logVal = irTemporary(
-                irCall(logGetter).apply { this.dispatchReceiver = irGet(dispatchParam) }
-            )
-            val msgExpr = irCall(ctx.function0InvokeSymbol).apply {
-                dispatchReceiver = irGet(messageParam)
+        return builder.irBlock(resultType = ctx.irBuiltIns.unitType) {
+            val logTmp = irTemporary(irGetField(irGetObject(logSite.symbol), logField))
+            val msgCall = irCall(ctx.function0InvokeSymbol).apply {
+                dispatchReceiver = messageLambda
             }
-            val logCall = irCall(logMethodSymbol).also { call ->
-                call.dispatchReceiver = irGet(logVal)
-                call.putValueArgument(0, msgExpr)
-                if (hasThrowable) {
-                    call.putValueArgument(1, irGet(regularParams[0]))
-                }
+            val logCall = irCall(logMethodSymbol).apply {
+                dispatchReceiver = irGet(logTmp)
+                putValueArgument(0, msgCall)
+                if (hasThrowable) putValueArgument(1, throwableArg)
             }
             +irIfThen(
                 ctx.irBuiltIns.unitType,
-                irCall(isEnabledSymbol).apply { dispatchReceiver = irGet(logVal) },
+                irCall(isEnabledSymbol).apply { dispatchReceiver = irGet(logTmp) },
                 logCall,
             )
         }
     }
 
-    // ---------------- property helpers ----------------
+    // ---------------- log property body filling ----------------
 
     private fun ensureBackingField(prop: IrProperty, site: IrClass) {
         if (prop.backingField != null) return
@@ -123,11 +152,12 @@ internal class Slf4jKtxIrGenerator(
 
     private fun fillInitializer(prop: IrProperty, site: IrClass) {
         val backingField = prop.backingField ?: return
+        if (backingField.initializer != null) return
         val builder = DeclarationIrBuilder(ctx, backingField.symbol)
-        val className = loggerNameFor(site)
+        val loggerName = loggerNameFor(site)
         backingField.initializer = builder.irExprBody(
             builder.irCall(ctx.getLoggerSymbol).apply {
-                putValueArgument(0, builder.irString(className))
+                putValueArgument(0, builder.irString(loggerName))
             }
         )
     }
@@ -143,16 +173,7 @@ internal class Slf4jKtxIrGenerator(
         )
     }
 
-    private fun findLogGetter(site: IrClass): IrSimpleFunction? {
-        for (decl in site.declarations) {
-            if (decl is IrProperty && decl.name == Slf4jKtxEntityNames.LOG_PROPERTY_ID) {
-                return decl.getter
-            }
-        }
-        return null
-    }
-
-    // ---------------- level-function helpers ----------------
+    // ---------------- Logger API symbol resolution ----------------
 
     private fun resolveIsEnabled(levelName: String): IrSimpleFunctionSymbol {
         val isEnabledName = "is${levelName.replaceFirstChar { it.uppercase() }}Enabled"
@@ -176,10 +197,9 @@ internal class Slf4jKtxIrGenerator(
             }
             .symbol
 
-    /**
-     * Companion: logger name = enclosing class's FQN (e.g. `com.example.OrderService`, not
-     * `com.example.OrderService.Companion`). Standalone `@Slf4j object`: the object's own FQN.
-     */
+    // ---------------- utilities ----------------
+
+    /** Companion: enclosing class FQN. Standalone `@Slf4j object`: the object's own FQN. */
     private fun loggerNameFor(site: IrClass): String {
         val target = if (site.isCompanion) {
             (site.parent as? IrClass) ?: return buildFqn(site)

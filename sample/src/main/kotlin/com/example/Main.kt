@@ -1,6 +1,6 @@
 package com.example
 
-import io.github.harryjhin.slf4j.ktx.Slf4j
+import io.github.harryjhin.slf4j.ktx.*
 
 @Slf4j
 class OrderService {

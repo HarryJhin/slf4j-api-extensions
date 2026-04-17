@@ -3,10 +3,21 @@ package io.github.harryjhin.slf4j.ktx
 import org.slf4j.Logger
 import org.slf4j.Marker
 
-// Marker-qualified, lazy-lambda SLF4J overloads. The plain (no-marker) lazy-lambda API is not
-// provided here — the slf4j-ktx compiler plugin generates equivalent Companion-member functions
-// for @Slf4j-annotated classes instead. These Marker overloads complement that by covering the
-// SLF4J Marker dimension, which the plugin does not synthesize.
+/**
+ * Marker-qualified, lazy-lambda SLF4J overloads.
+ *
+ * These complement the plain (no-marker) `T.trace / T.debug / T.info / T.warn / T.error`
+ * extensions in [LoggerExtensions.kt]. The slf4j-ktx compiler plugin handles the plain
+ * variant — it rewrites those call sites on `@Slf4j`-annotated classes to hit the Companion's
+ * pre-generated `log` field directly. Marker overloads are left as regular `Logger.xxx(...)`
+ * receiver extensions because (a) a Marker argument changes the call shape so IR rewriting
+ * buys less, and (b) invoking them via `log.trace(marker) { … }` from user code is the
+ * natural call form.
+ *
+ * Each overload is a level-gated lazy invocation: the message lambda is evaluated only when
+ * the corresponding `isXxxEnabled(marker)` returns true, matching the performance contract of
+ * the plain variant.
+ */
 
 inline fun Logger.trace(marker: Marker, message: () -> String) {
     if (isTraceEnabled(marker)) {

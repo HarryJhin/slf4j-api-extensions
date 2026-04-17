@@ -1,7 +1,7 @@
 // WITH_STDLIB
 // FULL_JDK
 
-import io.github.harryjhin.slf4j.ktx.Slf4j
+import io.github.harryjhin.slf4j.ktx.*
 
 // Collision policy: when the Companion already has any callable named `info`, the plugin
 // silent-skips *all* `info` overloads. Other level names are still generated.

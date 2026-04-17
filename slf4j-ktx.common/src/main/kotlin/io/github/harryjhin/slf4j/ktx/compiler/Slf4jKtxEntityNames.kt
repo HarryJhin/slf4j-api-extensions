@@ -21,12 +21,17 @@ object Slf4jKtxEntityNames {
     /** Fixed name of the Companion/object property injected by the plugin. */
     val LOG_PROPERTY_ID: Name = Name.identifier(Slf4jKtxPluginNames.LOG_PROPERTY_NAME)
 
-    /** Log-level function names the plugin synthesizes (both message-only and throwable-aware overloads). */
+    /** Set form of [LOG_PROPERTY_ID] — every synthetic declaration the plugin contributes. */
+    val ALL_CALLABLE_NAMES: Set<Name> = setOf(LOG_PROPERTY_ID)
+
+    /**
+     * Package hosting `T.trace/.debug/.info/.warn/.error × 2` runtime extensions in
+     * `slf4j-ktx-core`. The IR call-site rewriter matches this package + one of
+     * [LOG_LEVEL_NAMES] to identify a call it should redirect to the enclosing class's
+     * `Companion.log`.
+     */
+    val LOGGER_EXTENSIONS_PACKAGE: FqName = FqName("io.github.harryjhin.slf4j.ktx")
+
+    /** Level function names the runtime library exposes as `T.<level>(...)` extensions. */
     val LOG_LEVEL_NAMES: List<Name> = listOf("trace", "debug", "info", "warn", "error").map(Name::identifier)
-
-    /** Same as [LOG_LEVEL_NAMES] but as a Set for O(1) membership checks. */
-    val LOG_LEVEL_NAME_SET: Set<Name> = LOG_LEVEL_NAMES.toSet()
-
-    /** Union of [LOG_PROPERTY_ID] and [LOG_LEVEL_NAME_SET] — every callable the plugin contributes. */
-    val ALL_CALLABLE_NAMES: Set<Name> = LOG_LEVEL_NAME_SET + LOG_PROPERTY_ID
 }

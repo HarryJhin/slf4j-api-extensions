@@ -14,7 +14,11 @@ object Slf4jKtxPluginNames {
     /** Single CLI option — accepts one annotation FQN per occurrence; multi-valued. */
     const val ANNOTATION_OPTION: String = "annotation"
 
-    /** Fixed name of the injected Companion-member property. */
+    /**
+     * Name of the `Logger` property the plugin synthesizes on the generation site (Companion
+     * of a triggered class, or the triggered `object` itself). Also the symbol the IR pass
+     * looks for when rewriting runtime-extension call sites.
+     */
     const val LOG_PROPERTY_NAME: String = "log"
 
     /** The hard-coded trigger: the annotation shipped in slf4j-ktx-core. */
