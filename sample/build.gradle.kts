@@ -13,5 +13,6 @@ repositories {
 }
 
 dependencies {
+    implementation("io.github.harryjhin:slf4j-extensions-runtime:1.9.25-SNAPSHOT")
     implementation("org.slf4j:slf4j-simple:1.7.36")
 }

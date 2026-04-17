@@ -44,9 +44,14 @@ plugins {
     kotlin("jvm") version "1.9.25"
     id("io.github.harryjhin.slf4j-extensions") version "1.9.25"  // Kotlin 버전과 동일
 }
+
+dependencies {
+    implementation("io.github.harryjhin:slf4j-extensions-runtime:1.9.25")
+}
 ```
 
-Plugin version must match the Kotlin version. The plugin auto-adds the runtime dependency.
+Plugin version must match the Kotlin version. Runtime dependency must be declared
+explicitly (same version as plugin), following the kotlinx-serialization pattern.
 
 ## Gradle Configuration
 

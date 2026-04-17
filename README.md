@@ -51,6 +51,10 @@ plugins {
     kotlin("jvm") version "1.9.25"
     id("io.github.harryjhin.slf4j-extensions") version "1.9.25"  // Kotlin 버전과 동일
 }
+
+dependencies {
+    implementation("io.github.harryjhin:slf4j-extensions-runtime:1.9.25")  // 동일 버전
+}
 ```
 
 That's it. Write `trace { }`, `debug { }`, `info { }`, `warn { }`, `error { }` in any class.

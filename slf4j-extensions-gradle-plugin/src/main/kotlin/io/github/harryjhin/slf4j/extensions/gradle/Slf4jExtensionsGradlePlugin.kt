@@ -14,7 +14,6 @@ class Slf4jExtensionsGradlePlugin : KotlinCompilerPluginSupportPlugin {
         private const val PLUGIN_ID = "io.github.harryjhin.slf4j-extensions"
         private const val GROUP_ID = "io.github.harryjhin"
         private const val COMPILER_ARTIFACT_ID = "slf4j-extensions-compiler"
-        private const val RUNTIME_ARTIFACT_ID = "slf4j-extensions-runtime"
     }
 
     override fun apply(target: Project) {
@@ -28,12 +27,6 @@ class Slf4jExtensionsGradlePlugin : KotlinCompilerPluginSupportPlugin {
     ): Provider<List<SubpluginOption>> {
         val project = kotlinCompilation.target.project
         val extension = project.extensions.getByType(Slf4jExtensionsGradleExtension::class.java)
-
-        // Auto-add runtime dependency (version omitted — resolved via BOM or composite build)
-        project.dependencies.add(
-            "implementation",
-            "$GROUP_ID:$RUNTIME_ARTIFACT_ID",
-        )
 
         return project.provider {
             val options = mutableListOf<SubpluginOption>()

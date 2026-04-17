@@ -105,6 +105,26 @@ cd sample && ../gradlew run               # Integration test
 - No wildcard imports in production code
 - `@OptIn` annotations at function level, not global (except `ExperimentalCompilerApi`)
 
+## Consumer-side setup (important)
+
+The Gradle plugin does **not** auto-add the runtime dependency. Consumers
+must declare it explicitly — same convention as kotlinx-serialization,
+ksp, etc.
+
+```kotlin
+plugins {
+    kotlin("jvm") version "1.9.25"
+    id("io.github.harryjhin.slf4j-extensions") version "1.9.25"
+}
+dependencies {
+    implementation("io.github.harryjhin:slf4j-extensions-runtime:1.9.25")
+}
+```
+
+Plugin version, runtime version, and Kotlin version must all match. The
+compiler plugin artifact (`slf4j-extensions-compiler`) is resolved by the
+Kotlin Gradle plugin machinery — consumers don't reference it directly.
+
 ## Release workflow (SNAPSHOT-first)
 
 All Kotlin patch releases go through 3 stages. Full details: [RELEASING.md](RELEASING.md).
