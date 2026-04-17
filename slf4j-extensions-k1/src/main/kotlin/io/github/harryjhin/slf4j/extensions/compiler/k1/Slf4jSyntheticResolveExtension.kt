@@ -42,6 +42,17 @@ class Slf4jSyntheticResolveExtension(
     private val functionNames = listOf("trace", "debug", "info", "warn", "error")
         .map { Name.identifier(it) }
 
+    private companion object {
+        private val JPA_ANNOTATIONS = setOf(
+            "jakarta.persistence.Entity",
+            "jakarta.persistence.MappedSuperclass",
+            "jakarta.persistence.Embeddable",
+            "javax.persistence.Entity",
+            "javax.persistence.MappedSuperclass",
+            "javax.persistence.Embeddable",
+        )
+    }
+
     override fun getSyntheticPropertiesNames(thisDescriptor: ClassDescriptor): List<Name> {
         if (!shouldGenerateFor(thisDescriptor)) return emptyList()
         return listOf(propertyNameId)
@@ -223,6 +234,15 @@ class Slf4jSyntheticResolveExtension(
         // unbound after resolving our synthetic declarations in the inner scope.
         // Seen with `object : TypeReference<...>() {}` inside `fun <T> ...`.
         if (DescriptorUtils.isLocal(descriptor)) return false
+
+        // Skip JPA entity classes. Kotlin-aware annotation processors
+        // (QueryDSL APT, etc.) read the `@Metadata` annotation — not just the
+        // Java stub — so `@JvmSynthetic` alone does not hide our injected
+        // `log: Logger` property from them. The processors then emit invalid
+        // paths in generated Q-classes (e.g. `SimplePath<Logger> log =
+        // _super.log` where the supertype's Q-class has no `log`). Entities
+        // are data containers that should not log anyway.
+        if (descriptor.annotations.any { it.fqName?.asString() in JPA_ANNOTATIONS }) return false
 
         if (allClasses) return true
 
