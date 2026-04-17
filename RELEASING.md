@@ -20,7 +20,11 @@
 
 ## 릴리즈 절차
 
+모든 릴리즈는 **SNAPSHOT → 다운스트림 검증 → Release** 3단계를 거친다.
+
 ### 신규 Kotlin 패치 릴리즈 (예: `1.9.25`)
+
+#### 1단계: 브랜치 생성 & SNAPSHOT 빌드
 
 1. **브랜치 생성**
    ```bash
@@ -29,8 +33,7 @@
    ```
    v1 HEAD에서 직접 분기하는 것이 원칙. 단, HEAD가 더 높은 Kotlin 버전(예: 새 minor)으로 이동한 상태에서 과거 Kotlin 버전을 릴리즈해야 한다면 가장 가까운 호환 release 브랜치(예: `1.9.24-release`)에서 분기한다.
 
-2. **버전 설정**
-   `gradle.properties`
+2. **버전 설정** (`gradle.properties`)
    ```
    version=1.9.25-SNAPSHOT
    kotlinVersion=1.9.25
@@ -43,20 +46,42 @@
    ```
    Kotlin 버전에 따라 컴파일러 API가 달라지면 이 브랜치에서만 수정한다. v1 HEAD에는 반영하지 않는다.
 
-4. **릴리즈 버전으로 승격**
+#### 2단계: SNAPSHOT publish & 다운스트림 검증
+
+4. **SNAPSHOT publish** — 브랜치를 push하면 `publish-snapshot.yml`이 자동 트리거된다.
+   ```bash
+   git push origin 1.9.25-release
+   ```
+   결과물: `io.github.harryjhin:*:1.9.25-SNAPSHOT` → Central Portal snapshot repo.
+   SNAPSHOT은 같은 버전으로 재배포 가능하므로 수정 후 재푸시 반복 가능.
+
+5. **다운스트림 프로젝트에서 실통합 검증** (예: kovo-backend)
+   ```kotlin
+   repositories {
+       maven("https://central.sonatype.com/repository/maven-snapshots/")
+   }
+   dependencies {
+       implementation("io.github.harryjhin:slf4j-extensions-runtime:1.9.25-SNAPSHOT")
+   }
+   ```
+   실제 애플리케이션 빌드·실행·테스트로 문제 없는지 확인. 문제 발견 시 1.9.25-release 브랜치 수정 → 재푸시 → 재검증.
+
+#### 3단계: Release publish (비가역)
+
+6. **릴리즈 버전으로 승격** (`gradle.properties`)
    ```
    version=1.9.25
    ```
 
-5. **태그 & publish**
+7. **태그 & publish**
    ```bash
    git commit -am "release: v1.9.25"
    git tag v1.9.25
    git push origin 1.9.25-release v1.9.25
    ```
-   태그 push가 publish workflow를 트리거한다 (Infra #1 구현 후).
+   태그 push가 `publish.yml`을 트리거한다. `publish.yml`은 버전이 SNAPSHOT이면 실행 거부(safety check).
 
-6. **브랜치 freeze**
+8. **브랜치 freeze**
    해당 브랜치에는 추가 커밋 금지. 문제 발견 시 새 패치 번호로 별도 release 브랜치 생성.
 
 ### 과거 Kotlin 버전 릴리즈 (예: `1.5.0`을 나중에 지원 추가)
@@ -75,10 +100,16 @@
 ## Maven Central publish 전제 조건
 
 - 비-SNAPSHOT 버전 publish 시 GPG 서명 필수 (`signingInMemoryKey` 또는 `useGpgCmd()`).
-- GitHub Actions 시크릿:
-  - `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD` — Sonatype OSSRH 계정
-  - `SIGNING_IN_MEMORY_KEY`, `SIGNING_IN_MEMORY_KEY_PASSWORD` — GPG 키
-- `publish.yml` 현재 구현은 태그(`v*`) push 시 `./gradlew publish` 실행 → Sonatype Central Portal 자동 배포 API 호출 → GitHub Release 생성.
+- Central Portal namespace `io.github.harryjhin`에서 **"Enable SNAPSHOTs"** 1회 활성화 필요 (namespaces 페이지).
+- GitHub Actions 시크릿 (`maven` environment):
+  - `SONATYPE_USERNAME`, `SONATYPE_PASSWORD` — Sonatype Central Portal 계정
+  - `GPG_SECRET_KEY`, `GPG_PASSPHRASE` — GPG 키
+- Repository URL은 `build.gradle.kts`에서 `version.endsWith("-SNAPSHOT")` 기준으로 자동 분기:
+  - SNAPSHOT: `https://central.sonatype.com/repository/maven-snapshots/`
+  - Release: `https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/`
+- Workflow:
+  - `publish-snapshot.yml` — `*-release` 브랜치 push 시 실행. 버전이 SNAPSHOT 아니면 거부.
+  - `publish.yml` — `v*` 태그 push 시 실행. 버전이 SNAPSHOT이면 거부. Central Portal 자동 배포 API 호출 + GitHub Release 생성.
 
 ## 참고
 

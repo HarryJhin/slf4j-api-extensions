@@ -15,6 +15,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Verify version is NOT SNAPSHOT
+        run: |
+          version=$(grep '^version=' gradle.properties | cut -d= -f2)
+          echo "gradle.properties version: ${version}"
+          if [[ "${version}" == *-SNAPSHOT ]]; then
+            echo "::error::Release workflow refusing to run — version '${version}' is still a SNAPSHOT. Bump to release version before tagging."
+            exit 1
+          fi
+
       - uses: actions/setup-java@v5
         with:
           java-version: '17'

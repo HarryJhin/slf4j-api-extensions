@@ -61,7 +61,11 @@ configure(listOf(
             repositories {
                 maven {
                     name = "sonatype"
-                    url = uri("https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/")
+                    val isSnapshot = version.toString().endsWith("-SNAPSHOT")
+                    url = uri(
+                        if (isSnapshot) "https://central.sonatype.com/repository/maven-snapshots/"
+                        else "https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/"
+                    )
                     credentials {
                         username = findProperty("mavenCentralUsername")?.toString()
                         password = findProperty("mavenCentralPassword")?.toString()
