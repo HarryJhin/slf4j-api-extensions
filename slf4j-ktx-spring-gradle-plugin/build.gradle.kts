@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm")
     `java-gradle-plugin`
+    `java-library`
 }
 
 description = "Spring integration plugin that auto-applies slf4j-ktx and adds Spring stereotype triggers"
@@ -11,7 +12,11 @@ dependencies {
     // Needed for Kotlin to resolve Slf4jKtxGradleSubplugin's supertype
     // (KotlinCompilerPluginSupportPlugin) during `plugins.apply(...::class.java)` overload resolution.
     compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin-api:$kotlinVersion")
-    implementation(project(":slf4j-ktx-gradle-plugin"))
+    // `api` so consumers that depend on the Spring plugin (e.g. build-logic convention plugins)
+    // can reference Slf4jKtxGradleExtension directly to add custom trigger annotations without
+    // declaring a separate dependency on the main gradle plugin. Mirrors allopen+spring's
+    // `commonApi` wiring in JetBrains/kotlin (libraries/tools/kotlin-allopen/build.gradle.kts).
+    api(project(":slf4j-ktx-gradle-plugin"))
 }
 
 gradlePlugin {

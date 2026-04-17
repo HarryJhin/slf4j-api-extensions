@@ -25,8 +25,21 @@ class Slf4jKtxGradleSubplugin : KotlinCompilerPluginSupportPlugin {
 
     override fun getCompilerPluginId(): String = PLUGIN_ID
 
-    override fun getPluginArtifact(): SubpluginArtifact =
-        SubpluginArtifact(GROUP_NAME, ARTIFACT_NAME)
+    /**
+     * Release publication strategy: plugin version == Kotlin version, so the default 2-arg
+     * SubpluginArtifact works (Kotlin Gradle plugin fills the version from the consumer's Kotlin
+     * version). For SNAPSHOT publications that decoupling breaks — `1.9.25-SNAPSHOT` is not a
+     * Kotlin version — so we pass the version explicitly. The plugin version is stamped into a
+     * classpath resource at build time (see `generatePluginVersionProperties` in build.gradle.kts).
+     */
+    override fun getPluginArtifact(): SubpluginArtifact {
+        val version = PLUGIN_VERSION
+        return if (version.endsWith("-SNAPSHOT")) {
+            SubpluginArtifact(GROUP_NAME, ARTIFACT_NAME, version)
+        } else {
+            SubpluginArtifact(GROUP_NAME, ARTIFACT_NAME)
+        }
+    }
 
     override fun applyToCompilation(
         kotlinCompilation: KotlinCompilation<*>,
@@ -44,5 +57,17 @@ class Slf4jKtxGradleSubplugin : KotlinCompilerPluginSupportPlugin {
         const val GROUP_NAME: String = "io.github.harryjhin"
         const val ARTIFACT_NAME: String = "slf4j-ktx-compiler-plugin-embeddable"
         const val ANNOTATION_OPTION: String = "annotation"
+
+        private const val VERSION_RESOURCE = "/io/github/harryjhin/slf4j/ktx/gradle/version.properties"
+
+        private val PLUGIN_VERSION: String by lazy {
+            val stream = Slf4jKtxGradleSubplugin::class.java.getResourceAsStream(VERSION_RESOURCE)
+                ?: error("slf4j-ktx Gradle plugin missing $VERSION_RESOURCE — rebuild required")
+            stream.use { input ->
+                val props = java.util.Properties().apply { load(input) }
+                props.getProperty("version")
+                    ?: error("version not found in $VERSION_RESOURCE")
+            }
+        }
     }
 }
