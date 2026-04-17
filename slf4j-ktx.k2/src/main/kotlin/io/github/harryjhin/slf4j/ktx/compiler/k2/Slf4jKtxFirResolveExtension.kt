@@ -8,16 +8,19 @@ import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.Visibilities
 import org.jetbrains.kotlin.fir.FirSession
 import org.jetbrains.kotlin.fir.analysis.checkers.getContainingClassSymbol
+import org.jetbrains.kotlin.fir.declarations.FirDeclarationOrigin
 import org.jetbrains.kotlin.fir.declarations.utils.isCompanion
 import org.jetbrains.kotlin.fir.extensions.FirDeclarationGenerationExtension
 import org.jetbrains.kotlin.fir.extensions.FirDeclarationPredicateRegistrar
 import org.jetbrains.kotlin.fir.extensions.MemberGenerationContext
 import org.jetbrains.kotlin.fir.extensions.NestedClassGenerationContext
 import org.jetbrains.kotlin.fir.plugin.createCompanionObject
+import org.jetbrains.kotlin.fir.plugin.createDefaultPrivateConstructor
 import org.jetbrains.kotlin.fir.plugin.createMemberFunction
 import org.jetbrains.kotlin.fir.plugin.createMemberProperty
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassLikeSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassSymbol
+import org.jetbrains.kotlin.fir.symbols.impl.FirConstructorSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirNamedFunctionSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirPropertySymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirRegularClassSymbol
@@ -80,7 +83,29 @@ class Slf4jKtxFirResolveExtension(
                 else -> null
             }
         }.toSet()
-        return Slf4jKtxEntityNames.ALL_CALLABLE_NAMES - existing
+        val names = (Slf4jKtxEntityNames.ALL_CALLABLE_NAMES - existing).toMutableSet()
+        // When THIS plugin synthesized the Companion itself, we must also emit its primary
+        // constructor (see [generateConstructors]). Without this, JVM ObjectClassLowering
+        // aborts with "Object should have a primary constructor: Companion".
+        // Mirrors SerializationFirResolveExtension.getCallableNamesForClass (line 97-100).
+        val origin = classSymbol.origin as? FirDeclarationOrigin.Plugin
+        if (origin?.key == Slf4jKtxPluginKey) {
+            names += SpecialNames.INIT
+        }
+        return names
+    }
+
+    /**
+     * Emit the primary constructor for plugin-synthesized Companions.
+     * Only when the owner's origin is our plugin key — we never touch user-declared Companions
+     * or objects whose constructors already exist. Mirrors
+     * SerializationFirResolveExtension.generateConstructors (line 296-300).
+     */
+    override fun generateConstructors(context: MemberGenerationContext): List<FirConstructorSymbol> {
+        val owner = context.owner
+        val origin = owner.origin as? FirDeclarationOrigin.Plugin ?: return emptyList()
+        if (origin.key != Slf4jKtxPluginKey) return emptyList()
+        return listOf(createDefaultPrivateConstructor(owner, Slf4jKtxPluginKey).symbol)
     }
 
     override fun generateProperties(

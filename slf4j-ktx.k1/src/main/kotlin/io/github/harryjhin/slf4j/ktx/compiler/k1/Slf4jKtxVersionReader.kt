@@ -33,12 +33,24 @@ internal object Slf4jKtxVersionReader {
         val markerClass = module.findClassAcrossModuleDependencies(
             ClassId.topLevel(Slf4jKtxPluginNames.SLF4J_ANNOTATION_FQ_NAME)
         ) ?: return null
-        val source = markerClass.source as? KotlinJvmBinarySourceElement ?: return null
+
+        // The annotation symbol was found — CORE_MISSING must NOT fire from this point on.
+        // The remaining manifest probe is best-effort: CORE_TOO_OLD / COMPILER_TOO_OLD can only
+        // be decided when the core library is loaded from a real JAR (with MANIFEST.MF).
+        // Composite builds and class-directory classpaths have no JAR to inspect — treat those
+        // as "compatible" (no manifest = no version constraint).
+        val source = markerClass.source as? KotlinJvmBinarySourceElement ?: return compatibleWithoutManifest()
         val location = source.binaryClass.location
         val jarPath = location.removeSuffix(CLASS_SUFFIX)
-        if (!jarPath.endsWith(".jar")) return null
+        if (!jarPath.endsWith(".jar")) return compatibleWithoutManifest()
         val jarFile = File(jarPath)
-        if (!jarFile.canRead()) return null
-        return Slf4jKtxVersions.readFromJar(jarFile)
+        if (!jarFile.canRead()) return compatibleWithoutManifest()
+        return Slf4jKtxVersions.readFromJar(jarFile) ?: compatibleWithoutManifest()
     }
+
+    private fun compatibleWithoutManifest(): Slf4jKtxVersions.RuntimeVersions =
+        Slf4jKtxVersions.RuntimeVersions(
+            implementationVersion = Slf4jKtxVersions.MINIMAL_SUPPORTED_VERSION,
+            requireKotlinVersion = null,
+        )
 }

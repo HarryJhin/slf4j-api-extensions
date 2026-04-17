@@ -29,7 +29,11 @@ class Slf4jKtxResolveExtension(
     override fun getSyntheticCompanionObjectNameIfNeeded(thisDescriptor: ClassDescriptor): Name? {
         if (!Slf4jKtxClassFilter.shouldGenerateFor(thisDescriptor, config)) return null
         if (thisDescriptor.kind == ClassKind.OBJECT) return null           // objects are their own singleton
-        if (thisDescriptor.companionObjectDescriptor != null) return null  // user already has one
+        // Do NOT query `thisDescriptor.companionObjectDescriptor` here — it triggers a recursive
+        // lazy-value resolve under LockBasedStorageManager. Kotlin only invokes this hook for
+        // classes that still need a companion, so the guard is unnecessary. Mirrors the shape
+        // of SerializationResolveExtension.getSyntheticCompanionObjectNameIfNeeded (v1.9.25),
+        // which deliberately avoids the same cycle.
         return SpecialNames.DEFAULT_NAME_FOR_COMPANION_OBJECT
     }
 
