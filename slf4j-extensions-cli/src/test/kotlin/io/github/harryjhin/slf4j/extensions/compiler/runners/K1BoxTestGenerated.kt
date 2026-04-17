@@ -65,4 +65,16 @@ class K1BoxTestGenerated : AbstractK1BoxTest() {
     fun testNestedClass() {
         runTest("slf4j-extensions-cli/testData/box/nestedClass.kt")
     }
+
+    @Test
+    @TestMetadata("objectWithGenericMethod.kt")
+    fun testObjectWithGenericMethod() {
+        runTest("slf4j-extensions-cli/testData/box/objectWithGenericMethod.kt")
+    }
+
+    @Test
+    @TestMetadata("localAnonymousInsideGeneric.kt")
+    fun testLocalAnonymousInsideGeneric() {
+        runTest("slf4j-extensions-cli/testData/box/localAnonymousInsideGeneric.kt")
+    }
 }

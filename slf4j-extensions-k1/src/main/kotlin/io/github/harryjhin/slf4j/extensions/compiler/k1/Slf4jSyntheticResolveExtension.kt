@@ -18,6 +18,7 @@ import org.jetbrains.kotlin.incremental.components.NoLookupLocation
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.resolve.BindingContext
+import org.jetbrains.kotlin.resolve.DescriptorUtils
 import org.jetbrains.kotlin.resolve.descriptorUtil.builtIns
 import org.jetbrains.kotlin.resolve.descriptorUtil.module
 import org.jetbrains.kotlin.resolve.extensions.SyntheticResolveExtension
@@ -186,6 +187,13 @@ class Slf4jSyntheticResolveExtension(
         if (descriptor.kind == ClassKind.INTERFACE ||
             descriptor.kind == ClassKind.ANNOTATION_CLASS
         ) return false
+
+        // Skip local and anonymous classes (declared inside functions/property initializers).
+        // Injecting synthetic members into such classes corrupts IR linking of the
+        // enclosing generic method's type parameters — psi2ir leaves the outer T
+        // unbound after resolving our synthetic declarations in the inner scope.
+        // Seen with `object : TypeReference<...>() {}` inside `fun <T> ...`.
+        if (DescriptorUtils.isLocal(descriptor)) return false
 
         if (allClasses) return true
 
