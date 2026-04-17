@@ -33,6 +33,7 @@ import org.jetbrains.kotlin.types.TypeProjectionImpl
 class Slf4jSyntheticResolveExtension(
     private val propertyName: String,
     private val annotations: List<String>,
+    private val excludeAnnotations: List<String>,
     private val packages: List<String>,
     private val allClasses: Boolean,
 ) : SyntheticResolveExtension {
@@ -42,16 +43,7 @@ class Slf4jSyntheticResolveExtension(
     private val functionNames = listOf("trace", "debug", "info", "warn", "error")
         .map { Name.identifier(it) }
 
-    private companion object {
-        private val JPA_ANNOTATIONS = setOf(
-            "jakarta.persistence.Entity",
-            "jakarta.persistence.MappedSuperclass",
-            "jakarta.persistence.Embeddable",
-            "javax.persistence.Entity",
-            "javax.persistence.MappedSuperclass",
-            "javax.persistence.Embeddable",
-        )
-    }
+    private val excludeAnnotationSet: Set<String> = excludeAnnotations.toSet()
 
     override fun getSyntheticPropertiesNames(thisDescriptor: ClassDescriptor): List<Name> {
         if (!shouldGenerateFor(thisDescriptor)) return emptyList()
@@ -202,8 +194,8 @@ class Slf4jSyntheticResolveExtension(
         result.add(throwableFunc)
     }
 
-    private fun isJpaEntity(descriptor: ClassDescriptor): Boolean =
-        descriptor.annotations.any { it.fqName?.asString() in JPA_ANNOTATIONS }
+    private fun hasExcludedAnnotation(descriptor: ClassDescriptor): Boolean =
+        descriptor.annotations.any { it.fqName?.asString() in excludeAnnotationSet }
 
     /**
      * Builds an [Annotations] instance containing a single `@kotlin.jvm.JvmSynthetic`
@@ -238,22 +230,19 @@ class Slf4jSyntheticResolveExtension(
         // Seen with `object : TypeReference<...>() {}` inside `fun <T> ...`.
         if (DescriptorUtils.isLocal(descriptor)) return false
 
-        // Skip JPA entity classes. Kotlin-aware annotation processors
-        // (QueryDSL APT, etc.) read the `@Metadata` annotation — not just the
-        // Java stub — so `@JvmSynthetic` alone does not hide our injected
-        // `log: Logger` property from them. The processors then emit invalid
-        // paths in generated Q-classes (e.g. `SimplePath<Logger> log =
-        // _super.log` where the supertype's Q-class has no `log`). Entities
-        // are data containers that should not log anyway.
-        if (isJpaEntity(descriptor)) return false
-
-        // Also skip companion objects of JPA entities. The companion itself
-        // carries no JPA annotation, so without this check we would inject
-        // synthetic members into it, and QueryDSL's Kotlin-aware APT still
-        // picks up the member from the owning class's Kotlin metadata chain.
-        if (descriptor.isCompanionObject) {
-            val owner = descriptor.containingDeclaration as? ClassDescriptor
-            if (owner != null && isJpaEntity(owner)) return false
+        // User-configured opt-out. A class carrying any of these annotations
+        // (or whose enclosing class does, when it's a companion object) is
+        // excluded from injection. Typical use: JPA (`jakarta.persistence.Entity`
+        // etc.) to avoid conflicts with Kotlin-aware annotation processors
+        // such as QueryDSL APT, which would otherwise pick up the synthetic
+        // `log` property via the class's `@Metadata` and emit invalid
+        // `_super.log` paths in generated Q-classes.
+        if (excludeAnnotationSet.isNotEmpty()) {
+            if (hasExcludedAnnotation(descriptor)) return false
+            if (descriptor.isCompanionObject) {
+                val owner = descriptor.containingDeclaration as? ClassDescriptor
+                if (owner != null && hasExcludedAnnotation(owner)) return false
+            }
         }
 
         if (allClasses) return true

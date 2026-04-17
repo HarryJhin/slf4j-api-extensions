@@ -51,6 +51,10 @@ class Slf4jExtensionsGradlePlugin : KotlinCompilerPluginSupportPlugin {
                 options += SubpluginOption("annotation", anno)
             }
 
+            for (anno in extension.myExcludeAnnotations) {
+                options += SubpluginOption("excludeAnnotation", anno)
+            }
+
             for (pkg in extension.myPackages) {
                 options += SubpluginOption("package", pkg)
             }

@@ -28,6 +28,13 @@ class Slf4jExtensionsCommandLineProcessor : CommandLineProcessor {
             allowMultipleOccurrences = true,
         ),
         CliOption(
+            optionName = Slf4jExtensionsPluginNames.EXCLUDE_ANNOTATION_OPTION,
+            valueDescription = "<fqname>",
+            description = "Annotation FQ name to exclude (skip classes/companions carrying it)",
+            required = false,
+            allowMultipleOccurrences = true,
+        ),
+        CliOption(
             optionName = Slf4jExtensionsPluginNames.PACKAGES_OPTION,
             valueDescription = "<name>",
             description = "Package name to target",
@@ -52,6 +59,8 @@ class Slf4jExtensionsCommandLineProcessor : CommandLineProcessor {
                 configuration.put(Slf4jExtensionsConfigurationKeys.PROPERTY_NAME, value)
             Slf4jExtensionsPluginNames.ANNOTATION_OPTION ->
                 configuration.appendList(Slf4jExtensionsConfigurationKeys.ANNOTATIONS, value)
+            Slf4jExtensionsPluginNames.EXCLUDE_ANNOTATION_OPTION ->
+                configuration.appendList(Slf4jExtensionsConfigurationKeys.EXCLUDE_ANNOTATIONS, value)
             Slf4jExtensionsPluginNames.PACKAGES_OPTION ->
                 configuration.appendList(Slf4jExtensionsConfigurationKeys.PACKAGES, value)
             Slf4jExtensionsPluginNames.ALL_CLASSES_OPTION ->

@@ -9,6 +9,9 @@ object Slf4jExtensionsConfigurationKeys {
     val ANNOTATIONS: CompilerConfigurationKey<List<String>> =
         CompilerConfigurationKey.create("slf4j.extensions.annotations")
 
+    val EXCLUDE_ANNOTATIONS: CompilerConfigurationKey<List<String>> =
+        CompilerConfigurationKey.create("slf4j.extensions.excludeAnnotations")
+
     val PACKAGES: CompilerConfigurationKey<List<String>> =
         CompilerConfigurationKey.create("slf4j.extensions.packages")
 

@@ -28,6 +28,8 @@ class Slf4jExtensionsCompilerPluginRegistrar : CompilerPluginRegistrar() {
                 ?: Slf4jExtensionsPluginNames.DEFAULT_PROPERTY_NAME
             val annotations = configuration.get(Slf4jExtensionsConfigurationKeys.ANNOTATIONS)
                 ?: emptyList()
+            val excludeAnnotations = configuration.get(Slf4jExtensionsConfigurationKeys.EXCLUDE_ANNOTATIONS)
+                ?: emptyList()
             val packages = configuration.get(Slf4jExtensionsConfigurationKeys.PACKAGES)
                 ?: emptyList()
             val allClasses = configuration.get(Slf4jExtensionsConfigurationKeys.ALL_CLASSES)
@@ -35,7 +37,7 @@ class Slf4jExtensionsCompilerPluginRegistrar : CompilerPluginRegistrar() {
 
             // K1 frontend
             SyntheticResolveExtension.registerExtension(
-                Slf4jSyntheticResolveExtension(propertyName, annotations, packages, allClasses)
+                Slf4jSyntheticResolveExtension(propertyName, annotations, excludeAnnotations, packages, allClasses)
             )
 
             // IR backend
