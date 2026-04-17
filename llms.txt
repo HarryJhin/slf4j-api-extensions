@@ -1,12 +1,13 @@
-# slf4j-extensions
+# slf4j-extensions (v1 — Kotlin 1.x)
 
-> Kotlin compiler plugin that eliminates SLF4J logging boilerplate by auto-injecting a private `log: Logger` property and 10 inline logging functions into classes. Users write `trace { "message" }` directly — no Logger declaration needed. Lambda is not evaluated when log level is disabled. Supports K1 and K2 compiler pipelines. Works with Kotlin 1.5+, SLF4J 1.7.36+, Java 8+.
+> Kotlin 1.x compiler plugin that eliminates SLF4J logging boilerplate by auto-injecting a private `log: Logger` property and 10 inline logging functions into classes. Users write `trace { "message" }` directly — no Logger declaration needed. Lambda is not evaluated when log level is disabled. K1 compiler only. Works with Kotlin 1.5–1.9, SLF4J 1.7.36+, Java 8+.
 
 - Compiler plugin: auto-injects `log` property + `trace`/`debug`/`info`/`warn`/`error` functions
 - Runtime library: inline Logger/Marker extensions + `withMDC {}` scoped utilities
 - Gradle plugin: one-liner setup via `plugins { id("io.github.harryjhin.slf4j-extensions") }`
+- Kotlin 2.x 지원은 `main` 브랜치 참조
 
 ## Docs
 
-- [Full API reference (llms-full.txt)](https://raw.githubusercontent.com/HarryJhin/slf4j-api-extensions/v2/llms-full.txt): Complete API signatures and usage examples
+- [Full API reference (llms-full.txt)](https://raw.githubusercontent.com/HarryJhin/slf4j-api-extensions/v1/llms-full.txt): Complete API signatures and usage examples
 - [GitHub Repository](https://github.com/HarryJhin/slf4j-api-extensions): Source code, issues

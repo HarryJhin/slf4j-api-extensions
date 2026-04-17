@@ -1,8 +1,10 @@
 # slf4j-extensions
 
-[![Kotlin](https://img.shields.io/badge/Kotlin-1.5%2B-7F52FF.svg?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Kotlin](https://img.shields.io/badge/Kotlin-1.5--1.9-7F52FF.svg?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![SLF4J](https://img.shields.io/badge/SLF4J-1.7.36%2B-blue.svg)](https://www.slf4j.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+> **Branch `v1`** — Kotlin 1.x 전용 (K1 compiler). Kotlin 2.x는 `main` 브랜치 사용.
 
 **Zero-boilerplate SLF4J logging** for Kotlin — a compiler plugin that auto-injects Logger and inline logging functions into your classes.
 
@@ -46,8 +48,8 @@ class OrderService {
 ```kotlin
 // build.gradle.kts
 plugins {
-    kotlin("jvm") version "2.3.20"
-    id("io.github.harryjhin.slf4j-extensions") version "2.3.20"  // Kotlin 버전과 동일
+    kotlin("jvm") version "1.9.25"
+    id("io.github.harryjhin.slf4j-extensions") version "1.9.25"  // Kotlin 버전과 동일
 }
 ```
 
@@ -123,16 +125,21 @@ Different syntax (`()` vs `{}`), no ambiguity.
 플러그인 버전을 **사용 중인 Kotlin 버전과 동일하게** 지정합니다.
 
 ```kotlin
-kotlin("jvm") version "2.3.20"
-id("io.github.harryjhin.slf4j-extensions") version "2.3.20"  // 동일
+kotlin("jvm") version "1.9.25"
+id("io.github.harryjhin.slf4j-extensions") version "1.9.25"  // 동일
 ```
 
 | Item | Requirement |
 |------|-------------|
 | Plugin version | = Kotlin version |
+| Kotlin | 1.5 – 1.9 (이 브랜치) |
 | Java | 8+ |
 | SLF4J | 1.7.36+ |
 | Gradle | 8.0+ |
+
+## Releasing
+
+릴리즈 프로세스·브랜치/태그 규약은 [RELEASING.md](RELEASING.md) 참조.
 
 ## For LLMs
 

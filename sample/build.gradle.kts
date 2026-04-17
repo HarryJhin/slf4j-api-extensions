@@ -1,5 +1,5 @@
 plugins {
-    kotlin("jvm") version "2.3.20"
+    kotlin("jvm") version "1.9.25"
     id("io.github.harryjhin.slf4j-extensions")
     application
 }
