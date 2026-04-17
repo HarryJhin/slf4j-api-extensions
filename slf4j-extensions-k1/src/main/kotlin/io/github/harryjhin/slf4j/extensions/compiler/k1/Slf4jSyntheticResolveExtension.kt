@@ -202,6 +202,9 @@ class Slf4jSyntheticResolveExtension(
         result.add(throwableFunc)
     }
 
+    private fun isJpaEntity(descriptor: ClassDescriptor): Boolean =
+        descriptor.annotations.any { it.fqName?.asString() in JPA_ANNOTATIONS }
+
     /**
      * Builds an [Annotations] instance containing a single `@kotlin.jvm.JvmSynthetic`
      * annotation. Synthetic members carry this so kapt-generated Java stubs omit
@@ -242,7 +245,16 @@ class Slf4jSyntheticResolveExtension(
         // paths in generated Q-classes (e.g. `SimplePath<Logger> log =
         // _super.log` where the supertype's Q-class has no `log`). Entities
         // are data containers that should not log anyway.
-        if (descriptor.annotations.any { it.fqName?.asString() in JPA_ANNOTATIONS }) return false
+        if (isJpaEntity(descriptor)) return false
+
+        // Also skip companion objects of JPA entities. The companion itself
+        // carries no JPA annotation, so without this check we would inject
+        // synthetic members into it, and QueryDSL's Kotlin-aware APT still
+        // picks up the member from the owning class's Kotlin metadata chain.
+        if (descriptor.isCompanionObject) {
+            val owner = descriptor.containingDeclaration as? ClassDescriptor
+            if (owner != null && isJpaEntity(owner)) return false
+        }
 
         if (allClasses) return true
 
