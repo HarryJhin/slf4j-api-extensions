@@ -1,12 +1,12 @@
-# slf4j-extensions (v1 — Kotlin 1.x)
+# slf4j-ktx (Kotlin 1.9.25)
 
-> Kotlin 1.x compiler plugin that eliminates SLF4J logging boilerplate by auto-injecting a private `log: Logger` property and 10 inline logging functions into classes. Users write `trace { "message" }` directly — no Logger declaration needed. Lambda is not evaluated when log level is disabled. K1 compiler only. Works with Kotlin 1.5–1.9, SLF4J 1.7.36+, Java 8+. Kotlin 2.x는 `main` 브랜치 참조.
+> Kotlin 1.9.25 compiler plugin. Annotate a class with `@io.github.harryjhin.slf4j.ktx.Slf4j` and the plugin synthesizes its `Companion` with an internal `log: Logger` plus `trace`/`debug`/`info`/`warn`/`error × 2`. User class body untouched. Lazy: `if (log.isXxxEnabled) log.xxx(message())`. 1-hop meta-annotation trigger. Spring integration via a separate Gradle plugin. K1 and K2 both registered. Branch `1.9.25-release`; rewrite from the legacy `slf4j-extensions` modules — see CHANGELOG.md.
 
 Documentation: https://github.com/HarryJhin/slf4j-api-extensions
 
 ## The Problem
 
-Every class that logs needs the same boilerplate:
+Every class that logs repeats the same Logger declaration and manual `isXxxEnabled` guards:
 
 ```kotlin
 class OrderService {
@@ -20,11 +20,12 @@ class OrderService {
 }
 ```
 
-Logger declaration is repeated in every class. Level-guarded logging requires manual `isXxxEnabled` checks to avoid string concatenation overhead.
-
 ## The Solution
 
 ```kotlin
+import io.github.harryjhin.slf4j.ktx.Slf4j
+
+@Slf4j
 class OrderService {
     fun process(order: Order) {
         trace { "processing: ${order.id}" }
@@ -34,40 +35,59 @@ class OrderService {
 }
 ```
 
-Zero boilerplate. Lambda is not evaluated when level is disabled.
+Zero boilerplate. Lambda is not evaluated when the level is disabled.
 
 ## Installation
 
 ```kotlin
-// build.gradle.kts
 plugins {
     kotlin("jvm") version "1.9.25"
-    id("io.github.harryjhin.slf4j-extensions") version "1.9.25"  // Kotlin 버전과 동일
+    id("io.github.harryjhin.slf4j-ktx") version "1.9.25"   // plugin ver ≡ Kotlin ver
 }
 
 dependencies {
-    implementation("io.github.harryjhin:slf4j-extensions-runtime:1.9.25")
+    implementation("io.github.harryjhin:slf4j-ktx-core:0.1.0")
+    runtimeOnly("org.slf4j:slf4j-simple:2.0.13")
 }
 ```
 
-Plugin version must match the Kotlin version. Runtime dependency must be declared
-explicitly (same version as plugin), following the kotlinx-serialization pattern.
+Plugin version pairs with the Kotlin version. Runtime dependency is explicit (kotlinx-serialization / KSP convention). `slf4j-ktx-core` has an independent cadence (`coreVersion`, starts `0.1.0`) from the compiler-plugin/Kotlin pair.
 
-## Gradle Configuration
+## Gradle DSL
 
 ```kotlin
-slf4jExtensions {
-    propertyName = "log"       // Logger property name (default: "log")
-    allClasses = true          // Apply to all classes (default: true)
-    annotation("com.example.Logged")  // Or filter by annotation
-    packages("com.example.service")   // Or filter by package
+slf4jKtx {
+    annotation("com.example.LoggedDomain")   // additional trigger FQN (multi-valued)
 }
 ```
+
+Single option. `@Slf4j` is always a trigger; `annotation("…")` adds more. No `propertyName`, no `allClasses`, no `packages(…)` — removed in the rewrite.
+
+## Spring Integration
+
+```kotlin
+plugins {
+    id("io.github.harryjhin.slf4j-ktx.spring") version "1.9.25"
+}
+```
+
+Auto-applies the main plugin and pushes six Spring stereotype FQNs as triggers:
+
+- `org.springframework.stereotype.Component`
+- `org.springframework.stereotype.Controller`
+- `org.springframework.stereotype.Service`
+- `org.springframework.stereotype.Repository`
+- `org.springframework.web.bind.annotation.RestController`
+- `org.springframework.web.bind.annotation.ControllerAdvice`
+
+Custom `slf4jKtx { annotation("…") }` entries combine with the Spring FQNs.
 
 ## What The Compiler Generates
 
-Source code:
+Source:
+
 ```kotlin
+@Slf4j
 class OrderService {
     fun process() {
         trace { "start" }
@@ -77,119 +97,177 @@ class OrderService {
 }
 ```
 
-Bytecode-equivalent after compilation:
+Bytecode-equivalent:
+
 ```kotlin
 class OrderService {
-    private val log: Logger = LoggerFactory.getLogger("com.example.OrderService")
-
-    private inline fun trace(message: () -> String) {
-        if (log.isTraceEnabled) log.trace(message())
-    }
-    private inline fun trace(throwable: Throwable, message: () -> String) {
-        if (log.isTraceEnabled) log.trace(message(), throwable)
-    }
-    // debug, info, warn, error × 2 — same pattern (10 total)
-
     fun process() {
-        trace { "start" }
-        info { "done" }
-        error(exception) { "failed" }
+        Companion.trace { "start" }     // resolved unqualified by Kotlin scope rules
+        Companion.info { "done" }
+        Companion.error(exception) { "failed" }
+    }
+
+    companion object {
+        internal val log: Logger = LoggerFactory.getLogger("com.example.OrderService")
+
+        internal fun trace(message: () -> String) {
+            if (log.isTraceEnabled) log.trace(message())
+        }
+        internal fun trace(throwable: Throwable, message: () -> String) {
+            if (log.isTraceEnabled) log.trace(message(), throwable)
+        }
+        // debug, info, warn, error × 2 — same pattern (10 level functions total)
     }
 }
 ```
 
-## Target Class Kinds
+User class body is never rewritten. If no Companion exists, the plugin creates one; if one exists, members are added alongside user declarations.
 
-| Kind | Logger injected | Notes |
-|------|----------------|-------|
-| `class` | Yes | Primary target |
-| `data class` | Yes | May have methods that log |
-| `enum class` | Yes | |
-| `sealed class` | Yes | Each subclass gets its own logger |
-| `object` | Yes | Singleton services |
-| `abstract class` | Yes | |
-| `interface` | No | No instance state |
-| `annotation class` | No | |
+For `@Slf4j object Foo`, members are injected onto the object itself (no Companion; the object is already the singleton).
+
+## Trigger Surface
+
+1. `@io.github.harryjhin.slf4j.ktx.Slf4j` on a class or object (primary).
+2. Any FQN registered via `slf4jKtx { annotation("…") }`.
+3. Any of the six Spring stereotypes (only when `id("io.github.harryjhin.slf4j-ktx.spring")` is applied).
+4. **1-hop meta-annotation** — a user annotation that itself carries one of the above:
+   ```kotlin
+   @Slf4j
+   annotation class LoggedStereotype
+
+   @LoggedStereotype
+   class OrderService { fun process() { info { "…" } } }
+   ```
+
+Meta-annotation is flat (1 hop). `@Slf4j` → `@LoggedStereotype` → `OrderService` triggers; `@Slf4j` → `@A` → `@B` → `OrderService` does not.
 
 ## Skip Conditions
 
-1. Class kind is `interface` or `annotation class`
-2. Class already has a property with the configured name (default: `log`)
-3. Gradle config specifies annotation/package filters and class doesn't match
+| Kind | Triggered? |
+|---|---|
+| `class`, `data class`, `enum class`, `sealed class`, `abstract class` | Yes, with a Companion |
+| `object` | Yes, members on the object |
+| `interface` | No |
+| `annotation class` | No (but `@Slf4j` on an annotation class works as a meta-trigger on *classes* that use it) |
+| local / anonymous classes | No |
 
-## `kotlin.error()` Non-Collision
+Collision policy (silent skip, matching kotlinx-serialization): if the user has declared a callable with the same name on the generation site (`log`, `trace`, etc.), the plugin emits nothing for that name. No warning, no diagnostic.
+
+## Where Members Are Visible
+
+Companion members are accessible **unqualified from the enclosing class body**. Everywhere else, they are not in scope.
+
+| Context | `info { "…" }` unqualified? |
+|---|---|
+| Member function / initializer of the annotated class | Yes |
+| Local function inside such a member | Yes |
+| Nested class inside the annotated class | **No** (nested class needs its own `@Slf4j`) |
+| Subclass body (parent is `@Slf4j`, child is not) | **No** (Companion members are not inherited) |
+| Top-level function or helper file | **No** |
+
+The rule: each declaration that needs logging gets its own `@Slf4j`. Matches Lombok `@Slf4j` semantics.
+
+## `log` Visibility
+
+The injected `log` property is `internal`. From inside the same module you can reach SLF4J APIs that the lazy-lambda surface doesn't cover (parameterized messages, conditional branches):
+
+```kotlin
+@Slf4j
+class OrderService {
+    fun process() {
+        info { "msg" }                     // primary API
+        log.info("literal {}", value)      // same module — use the Logger directly
+        if (log.isDebugEnabled) expensiveDump()
+    }
+}
+```
+
+Consumers in other modules cannot reach `log`; annotate each class that needs logging with `@Slf4j` — Lombok/kotlinx-serialization convention.
+
+## `kotlin.error()` Disambiguation
 
 ```kotlin
 error("msg")    // → kotlin.error(Any) → throws IllegalStateException
-error { "msg" } // → injected function → logs at ERROR level
+error { "msg" } // → Companion.error(() -> String) → logs at ERROR level
 ```
 
-Different call syntax (`()` vs `{}`). No ambiguity.
+Different call syntax — no resolution ambiguity.
 
-## Runtime Module API
+## Runtime Module API (`slf4j-ktx-core`)
 
-### Logger Extensions (10 functions)
+### `@Slf4j` annotation
 
 ```kotlin
-// LoggerExtensions.kt
-inline fun Logger.trace(message: () -> String)
-inline fun Logger.trace(throwable: Throwable, message: () -> String)
-inline fun Logger.debug(message: () -> String)
-inline fun Logger.debug(throwable: Throwable, message: () -> String)
-inline fun Logger.info(message: () -> String)
-inline fun Logger.info(throwable: Throwable, message: () -> String)
-inline fun Logger.warn(message: () -> String)
-inline fun Logger.warn(throwable: Throwable, message: () -> String)
-inline fun Logger.error(message: () -> String)
-inline fun Logger.error(throwable: Throwable, message: () -> String)
-```
+package io.github.harryjhin.slf4j.ktx
 
-Pattern: `if (isXxxEnabled) xxx(message())` — lambda not allocated when level disabled.
+@Target(AnnotationTarget.CLASS)
+@Retention(AnnotationRetention.BINARY)
+annotation class Slf4j
+```
 
 ### Marker Extensions (10 functions)
 
+Marker-qualified overloads stay in the runtime — they're not Companion members (different call shape).
+
 ```kotlin
-// MarkerExtensions.kt — accessed via log.info(marker) { "msg" }
+// MarkerExtensions.kt — invoked as log.info(marker) { "…" }
 inline fun Logger.trace(marker: Marker, message: () -> String)
 inline fun Logger.trace(marker: Marker, throwable: Throwable, message: () -> String)
-// debug, info, warn, error × 2 — same pattern
+inline fun Logger.debug(marker: Marker, message: () -> String)
+inline fun Logger.debug(marker: Marker, throwable: Throwable, message: () -> String)
+inline fun Logger.info(marker: Marker, message: () -> String)
+inline fun Logger.info(marker: Marker, throwable: Throwable, message: () -> String)
+inline fun Logger.warn(marker: Marker, message: () -> String)
+inline fun Logger.warn(marker: Marker, throwable: Throwable, message: () -> String)
+inline fun Logger.error(marker: Marker, message: () -> String)
+inline fun Logger.error(marker: Marker, throwable: Throwable, message: () -> String)
 ```
 
-Marker functions are NOT injected by compiler — accessed via `log.info(marker) { }`.
+Same lazy pattern — `if (isXxxEnabled(marker)) xxx(marker, message())`.
 
-### MDC Utilities (2 functions)
+### MDC Utilities
 
 ```kotlin
 // MdcExtensions.kt
-inline fun <T> withMDC(vararg pairs: Pair<String, String>, block: () -> T): T
-inline fun <T> withMDC(context: Map<String, String>, block: () -> T): T
+inline fun <R> withMDC(vararg entries: Pair<String, String?>, block: () -> R): R
 ```
 
-Sets MDC values for the duration of `block`, restores previous values on exit (exception-safe).
+Sets MDC entries for the duration of `block`, restores previous values on exit (exception-safe).
 
 ```kotlin
 withMDC("requestId" to "abc-123", "userId" to "user-1") {
-    info { "processing request" }  // MDC contains requestId + userId
+    info { "processing request" }
 }
-// MDC restored to previous state
 ```
 
-## Modules
+Passing `null` as a value removes the entry temporarily.
 
-| Module | Artifact | Description |
-|--------|----------|-------------|
-| `slf4j-extensions-runtime` | `io.github.harryjhin:slf4j-extensions-runtime` | Inline Logger/Marker/MDC extensions |
-| `slf4j-extensions-compiler` | `io.github.harryjhin:slf4j-extensions-compiler` | Compiler plugin (fat JAR) |
-| `slf4j-extensions-gradle-plugin` | `io.github.harryjhin:slf4j-extensions-gradle-plugin` | Gradle plugin |
+## Modules (published)
+
+| Artifact | Purpose |
+|---|---|
+| `io.github.harryjhin:slf4j-ktx-core` | `@Slf4j` annotation + Marker/MDC inline extensions. Independent `coreVersion`. |
+| `io.github.harryjhin:slf4j-ktx-compiler-plugin-embeddable` | Compiler plugin fat JAR. Resolved automatically by the Gradle plugin. |
+| `io.github.harryjhin:slf4j-ktx-gradle-plugin` | Main Gradle plugin (`slf4jKtx { }` DSL). |
+| `io.github.harryjhin:slf4j-ktx-spring-gradle-plugin` | Spring integration (auto-apply main + Spring stereotype FQNs). |
+
+Internal compiler modules (`slf4j-ktx.common`, `.k1`, `.k2`, `.backend`, `.cli`) are not published.
+
+## Versioning
+
+| Axis | Rule |
+|---|---|
+| Plugin version | ≡ Kotlin version (e.g. `1.9.25`). |
+| `slf4j-ktx-core` | Independent cadence; starts at `0.1.0`. Versioned semantically. |
+| `Require-Kotlin-Version` | Stamped in `slf4j-ktx-core`'s `META-INF/MANIFEST.MF`. The plugin's `VersionReader` reads this + `Implementation-Version` and emits `CORE_MISSING` / `CORE_TOO_OLD` / `COMPILER_TOO_OLD` diagnostics when the user's classpath is incompatible with the plugin build. |
 
 ## Compatibility
 
-Plugin version = Kotlin version. CI builds and publishes for each supported Kotlin version.
-
 | Item | Requirement |
-|------|-------------|
+|---|---|
+| Kotlin | 1.9.25 (this branch) |
 | Plugin version | = Kotlin version |
-| Kotlin | 1.5 – 1.9 (이 브랜치) |
-| Java | 8+ |
+| `slf4j-ktx-core` | 0.1.0+ (independent cadence) |
+| Java | 8+ runtime target, 17+ to build the project |
 | SLF4J | 1.7.36+ (compatible with 2.0) |
 | Gradle | 8.0+ |

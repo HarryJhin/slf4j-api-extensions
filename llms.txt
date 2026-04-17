@@ -1,13 +1,16 @@
-# slf4j-extensions (v1 — Kotlin 1.x)
+# slf4j-ktx (Kotlin 1.9.25)
 
-> Kotlin 1.x compiler plugin that eliminates SLF4J logging boilerplate by auto-injecting a private `log: Logger` property and 10 inline logging functions into classes. Users write `trace { "message" }` directly — no Logger declaration needed. Lambda is not evaluated when log level is disabled. K1 compiler only. Works with Kotlin 1.5–1.9, SLF4J 1.7.36+, Java 8+.
+> Kotlin 1.9.25 compiler plugin that eliminates SLF4J logging boilerplate. Annotate a class with `@Slf4j` and the plugin synthesizes its `Companion` with an internal `log: Logger` property plus `trace`/`debug`/`info`/`warn`/`error × 2` level functions. User class body, supertypes, constructors are never touched. Lazy: `if (log.isXxxEnabled) log.xxx(message())` — lambda skipped when the level is disabled. 1-hop meta-annotation support; Spring integration via a separate Gradle plugin. K1 and K2 both registered; the compiler picks the active frontend. Works with Kotlin 1.9.25, SLF4J 1.7.36+, Java 8+.
 
-- Compiler plugin: auto-injects `log` property + `trace`/`debug`/`info`/`warn`/`error` functions
-- Runtime library: inline Logger/Marker extensions + `withMDC {}` scoped utilities
-- Gradle plugin: one-liner setup via `plugins { id("io.github.harryjhin.slf4j-extensions") }`
-- Kotlin 2.x 지원은 `main` 브랜치 참조
+- Compiler plugin: Companion-centric synthesis + IR body generation for `log`, `trace/debug/info/warn/error × 2`
+- Runtime library `slf4j-ktx-core`: `@Slf4j` annotation + Marker/MDC inline extensions (independent `coreVersion`)
+- Gradle plugin: `slf4jKtx { annotation("…") }` DSL — single option for custom trigger FQNs
+- Spring Gradle plugin: auto-applies main + pushes six Spring stereotype FQNs as triggers
+- Branch `1.9.25-release`; rewrite from the legacy `slf4j-extensions` modules (see CHANGELOG.md)
 
 ## Docs
 
-- [Full API reference (llms-full.txt)](https://raw.githubusercontent.com/HarryJhin/slf4j-api-extensions/v1/llms-full.txt): Complete API signatures and usage examples
+- [Full API reference (llms-full.txt)](https://raw.githubusercontent.com/HarryJhin/slf4j-api-extensions/1.9.25-release/llms-full.txt): Complete API signatures and usage examples
+- [README](https://github.com/HarryJhin/slf4j-api-extensions/blob/1.9.25-release/README.md): Overview, quick start, DSL reference
+- [CHANGELOG](https://github.com/HarryJhin/slf4j-api-extensions/blob/1.9.25-release/CHANGELOG.md): Breaking changes and migration notes from `slf4j-extensions`
 - [GitHub Repository](https://github.com/HarryJhin/slf4j-api-extensions): Source code, issues

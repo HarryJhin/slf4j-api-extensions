@@ -1,149 +1,153 @@
 # AGENTS.md
 
-slf4j-extensions — Kotlin 1.x 컴파일러 플러그인. SLF4J Logger와 로깅 함수를 클래스에 자동 주입.
+slf4j-ktx — Kotlin 1.9.25 compiler plugin. Injects SLF4J Logger + level functions onto the `Companion` of annotated classes (or onto `@Slf4j object`s themselves).
 
-> **Branch:** `v1` — Kotlin 1.5–1.9 지원 (K1 only). `main`은 Kotlin 2.x (K1+K2) 별도 관리.
+> **Branch:** `1.9.25-release` — active rewrite from `slf4j-extensions`. Legacy `slf4j-extensions-*` modules are still checked in and will be removed in a follow-up. See [CHANGELOG.md](CHANGELOG.md) + [docs/REWRITE-PROGRESS.md](docs/REWRITE-PROGRESS.md).
 
 ## Project Overview
 
-This compiler plugin eliminates SLF4J logging boilerplate by auto-injecting a private `log: Logger` property and
-10 inline logging functions (`trace`, `debug`, `info`, `warn`, `error` × 2 overloads) into classes at compile time.
-Users write `trace { "message" }` directly without any Logger declaration.
+The plugin's promise: the user writes `@Slf4j class Foo { fun f() { info { "…" } } }` and the compiler emits `Foo.Companion` with a `log: Logger` property and ten level functions. The user class body — its supertypes, constructors, direct members — is never modified. This mirrors kotlinx-serialization, which puts `serializer()` on the Companion without touching the serializable class itself.
 
-### Modules
+## Modules
 
-- `slf4j-extensions-common` — Shared constants: PluginKey, ConfigurationKeys, PluginNames
-- `slf4j-extensions-k1` — K1 frontend: SyntheticResolveExtension (descriptor-based declaration generation)
-- `slf4j-extensions-backend` — IR backend: IrVisitorVoid-based body generation
-- `slf4j-extensions-cli` — Entry point: CommandLineProcessor + CompilerPluginRegistrar (`supportsK2 = false`)
-- `slf4j-extensions-compiler` — Fat JAR: bundles compiler modules via embedded configuration
-- `slf4j-extensions-runtime` — User runtime: inline Logger/Marker/MDC extension functions
-- `slf4j-extensions-gradle-plugin` — Gradle plugin: KotlinCompilerPluginSupportPlugin + DSL
-- `sample/` — Integration test: composite build verifying end-to-end plugin behavior
+### slf4j-ktx (active)
+
+- `slf4j-ktx.common` — shared plugin constants (`Slf4jKtxPluginKey`, `Slf4jKtxConfig`, entity/plugin names, version floors).
+- `slf4j-ktx.k1` — K1 frontend: `SyntheticResolveExtension` for Companion synthesis + level-function descriptors, `DescriptorSerializerPlugin` hook, `DeclarationChecker` for runtime-version diagnostics.
+- `slf4j-ktx.k2` — K2 FIR frontend: `FirDeclarationGenerationExtension` for Companion + callables, `FirAdditionalCheckersExtension` for diagnostics, session-scoped `FirExtensionSessionComponent` for manifest version caching.
+- `slf4j-ktx.backend` — IR lowering: fills Companion-member bodies (`if (log.isXxxEnabled) log.xxx(message(), throwable?)`) and initializes the `log` backing field via `LoggerFactory.getLogger(FQN)`.
+- `slf4j-ktx.cli` — aggregator: Register-All `CompilerPluginRegistrar` + single-option `CommandLineProcessor` (`annotation` FQN, multi-valued).
+- `slf4j-ktx.embeddable` — fat JAR for end-user consumption. `embedded` Gradle configuration + `zipTree`; no shadow plugin (compileOnly deps keep compiler internals out of the JAR).
+- `slf4j-ktx-core` — runtime library (published). `@Slf4j` annotation + Marker/MDC inline extensions. Independent `coreVersion` cadence; JAR manifest stamps `Implementation-Version` + `Require-Kotlin-Version` for two-axis compatibility checking.
+- `slf4j-ktx-gradle-plugin` — main Gradle plugin (`slf4jKtx { annotation("…") }` DSL, `SubpluginArtifact` pointing at `slf4j-ktx-compiler-plugin-embeddable`).
+- `slf4j-ktx-spring-gradle-plugin` — `Plugin<Project>` that auto-applies the main plugin and pushes six Spring stereotype FQNs into `Slf4jKtxGradleExtension.myAnnotations`. No separate `KotlinCompilerPluginSupportPlugin` — follows `kotlin-spring`'s `KotlinSpringSubplugin` pattern.
+
+### slf4j-extensions (legacy, scheduled for removal)
+
+Eight `slf4j-extensions-*` modules from the pre-rewrite era. They co-exist during the rewrite window and will be removed in a dedicated cleanup step.
 
 ### Tech Stack
 
-- Kotlin 1.9.25 (build toolchain, K1 pipeline only)
-- SLF4J API 1.7.36 (minimum runtime, compatible with 2.0)
+- Kotlin 1.9.25 (build + K1/K2 target)
+- SLF4J API 1.7.36 (min; compatible with 2.0)
 - Gradle 8.8 with Kotlin DSL
-- JUnit 5 + kotlin-compiler-internal-test-framework:1.9.25 for compiler tests
-- slf4j-test (valfirst 3.0.x) for runtime tests
+- JUnit 5 + `kotlin-compiler-internal-test-framework:1.9.25` for box tests
+- slf4j-test (valfirst 3.0.x) for runtime unit tests
 
-## Architecture
-
-```
-slf4j-extensions-common/
-├── Slf4jExtensionsPluginKey.kt      ← plugin key (shared constant)
-├── Slf4jExtensionsPluginNames.kt    ← PLUGIN_ID, option names, defaults
-└── Slf4jExtensionsConfigurationKeys.kt ← CompilerConfigurationKey instances
-
-slf4j-extensions-k1/
-└── Slf4jSyntheticResolveExtension.kt ← K1: property + function descriptors
-
-slf4j-extensions-backend/
-├── Slf4jIrGenerationExtension.kt    ← IrGenerationExtension adapter
-└── Slf4jIrTransformer.kt            ← IR: backing field + getter + function bodies
-
-slf4j-extensions-cli/
-├── Slf4jExtensionsCommandLineProcessor.kt  ← CLI option parsing
-├── Slf4jExtensionsCompilerPluginRegistrar.kt ← K1 + IR extension registration
-└── META-INF/services/                       ← SPI service files
-
-slf4j-extensions-compiler/
-└── build.gradle.kts  ← embedded() fat JAR packaging
-
-slf4j-extensions-runtime/
-├── LoggerExtensions.kt   ← 10 inline Logger extensions (5 levels × 2)
-├── MarkerExtensions.kt   ← 10 inline Marker extensions
-└── MdcExtensions.kt      ← withMDC scoped utilities
-
-slf4j-extensions-gradle-plugin/
-├── Slf4jExtensionsGradlePlugin.kt     ← KotlinCompilerPluginSupportPlugin
-└── Slf4jExtensionsGradleExtension.kt  ← DSL: propertyName, allClasses, annotation(), packages()
-```
-
-### Dependency Graph
+## Dependency Graph
 
 ```
-cli → {k1, backend} → common
-compiler → embedded(cli, k1, backend, common)
-gradle-plugin → compileOnly(kotlin-gradle-plugin-api)
-runtime → api(slf4j-api:1.7.36)
-sample → includeBuild(root) + runtime + compiler
+slf4j-ktx.common     (leaf — compileOnly compiler deps)
+slf4j-ktx.k1         → common
+slf4j-ktx.k2         → common
+slf4j-ktx.backend    → common
+slf4j-ktx.cli        → common, k1, k2, backend   (registrar + CLI options)
+slf4j-ktx.embeddable → embedded(common, k1, k2, backend, cli)   (fat JAR)
+
+slf4j-ktx-core                    → api(slf4j-api:1.7.36)
+slf4j-ktx-gradle-plugin           → compileOnly(kotlin-gradle-plugin-api)
+slf4j-ktx-spring-gradle-plugin    → implementation(slf4j-ktx-gradle-plugin) +
+                                    compileOnly(kotlin-gradle-plugin-api)
 ```
 
-## Compiler Plugin Flow (K1)
+## Compiler Plugin Flow
+
+K1 and K2 are both registered unconditionally by `Slf4jKtxComponentRegistrar` (`supportsK2 = true`). The compiler picks the active frontend by `languageVersion`.
+
+### K1
 
 ```
-Source → [Frontend] Slf4jSyntheticResolveExtension → [psi2ir] → [IR] Slf4jIrTransformer → Bytecode
-         getSyntheticPropertiesNames()                           ├─ Create backing field
-         generateSyntheticProperties() → log descriptor          ├─ Create getter body
-         generateSyntheticMethods() → function descriptors       └─ Fill function bodies:
-                                                                    if (isXxxEnabled) log.xxx(message())
+SyntheticResolveExtension
+├─ getSyntheticCompanionObjectNameIfNeeded → auto-create Companion when absent
+├─ getSyntheticPropertiesNames/FunctionNames → announce "log" + 5 level names
+├─ generateSyntheticProperties → log PropertyDescriptor (via Slf4jKtxDescriptorResolver)
+└─ generateSyntheticMethods → 5 × 2 level function descriptors
+
+DescriptorSerializerPlugin (empty; reserved for phantom-Companion filtering)
+StorageComponentContainerContributor → DeclarationChecker → runtime-version diagnostics
+```
+
+### K2
+
+```
+FirDeclarationGenerationExtension
+├─ getNestedClassifiersNames → announce Companion
+├─ generateNestedClassLikeDeclaration → createCompanionObject(key = Slf4jKtxPluginKey)
+├─ getCallableNamesForClass → "log" + 5 level names; also SpecialNames.INIT for plugin-synthesized Companion
+├─ generateProperties → log FirPropertySymbol (hasBackingField = true)
+├─ generateFunctions → level FirNamedFunctionSymbols
+└─ generateConstructors → createDefaultPrivateConstructor for plugin-synthesized Companion
+  (required; ObjectClassLowering fails otherwise — "Object should have a primary constructor")
+
+FirAdditionalCheckersExtension → FirClassChecker → runtime-version diagnostics
+FirExtensionSessionComponent → FirSlf4jKtxVersionReader (session-cached manifest probe)
+```
+
+### IR
+
+```
+IrGenerationExtension (Slf4jKtxLoweringExtension)
+└─ IrElementVisitorVoid (Slf4jKtxIrGenerator)
+    ├─ visitProperty → if isFromPlugin(afterK2): create backing field, init to LoggerFactory.getLogger(FQN), fill getter
+    └─ visitSimpleFunction → if isFromPlugin: body = if (log.isXxxEnabled) log.xxx(message.invoke()[, throwable])
+
+origin signal:
+  K1:  CallableMemberDescriptor.Kind.SYNTHESIZED
+  K2:  IrDeclarationOrigin.GeneratedByPlugin(Slf4jKtxPluginKey)
+
+logger name:
+  site is Companion → enclosing class FQN
+  site is @Slf4j object → object's own FQN
 ```
 
 ## Commands
 
 ```bash
-./gradlew clean build                     # Full build + all tests
-./gradlew :slf4j-extensions-runtime:test  # Runtime tests (38)
-./gradlew :slf4j-extensions-cli:test      # Compiler box tests (10, K1)
-cd sample && ../gradlew run               # Integration test
+./gradlew clean build                              # Full build
+./gradlew :slf4j-ktx-core:test                     # Runtime unit tests
+./gradlew :slf4j-ktx.cli:test                      # Box tests: 26 (K1 13 + K2 13)
+./gradlew :slf4j-ktx-gradle-plugin:jar             # Gradle plugin JAR + descriptor
+./gradlew :slf4j-ktx-spring-gradle-plugin:jar      # Spring Gradle plugin JAR + descriptor
+./gradlew :slf4j-ktx.embeddable:jar                # Fat JAR (compiler plugin)
 ```
+
+Sample integration (`sample/`) is scheduled to switch to the new plugin in a follow-up step; until then it exercises the legacy modules.
 
 ## Testing
 
-- Runtime: `slf4j-test` captures log events, JUnit 5 assertions
-- Compiler: JetBrains `kotlin-compiler-internal-test-framework:1.9.25` box tests
-  - `testData/box/*.kt` — `fun box(): String` returning `"OK"`
-  - `K1BoxTestGenerated` → `AbstractK1BoxTest` (classic pipeline)
-- Integration: `sample/` composite build with `slf4j-simple`
+- **Box tests** (`slf4j-ktx.cli:test`):
+  - Fixtures under `testData/box/*.kt` (root of the repo). Each contains `fun box(): String` that must return `"OK"`.
+  - Runners in `testFixtures/kotlin/.../runners/` (root of the repo): `AbstractSlf4jKtxK1BoxTest` extends `AbstractIrBlackBoxCodegenTest`; `AbstractSlf4jKtxFirLightTreeBoxTest` extends `AbstractFirLightTreeBlackBoxCodegenTest`.
+  - Generated `@TestMetadata` classes in `tests-gen/kotlin/.../runners/` are hand-written (the `generateTestGroupSuiteWithJUnit5` DSL ships in JetBrains' monorepo-only `tests-gen` module, not on Maven Central).
+  - 26 tests total: 13 fixtures × 2 frontends.
+- **Runtime unit tests** (`slf4j-ktx-core:test`): slf4j-test + JUnit 5 for the `@Slf4j` annotation and Marker/MDC utilities.
 
 ## Code Style
 
-- Kotlin source in English, comments in Korean where needed
-- No wildcard imports in production code
-- `@OptIn` annotations at function level, not global (except `ExperimentalCompilerApi`)
+- Kotlin source in English, Korean where a domain note is clearer.
+- No wildcard imports in production code.
+- `@OptIn(ExperimentalCompilerApi)` at declaration level; applied globally via `kotlin { compilerOptions { optIn.add("…") } }` in the build for compiler-facing modules.
 
-## Consumer-side setup (important)
+## Consumer-side setup
 
-The Gradle plugin does **not** auto-add the runtime dependency. Consumers
-must declare it explicitly — same convention as kotlinx-serialization,
-ksp, etc.
+The Gradle plugin does **not** auto-add `slf4j-ktx-core`. Declare it explicitly — same convention as kotlinx-serialization, KSP, etc. The compiler-plugin artifact (`slf4j-ktx-compiler-plugin-embeddable`) is resolved by the Kotlin Gradle plugin automatically; consumers never reference it directly.
 
 ```kotlin
 plugins {
     kotlin("jvm") version "1.9.25"
-    id("io.github.harryjhin.slf4j-extensions") version "1.9.25"
+    id("io.github.harryjhin.slf4j-ktx") version "1.9.25"
 }
 dependencies {
-    implementation("io.github.harryjhin:slf4j-extensions-runtime:1.9.25")
+    implementation("io.github.harryjhin:slf4j-ktx-core:0.1.0")
 }
 ```
 
-Plugin version, runtime version, and Kotlin version must all match. The
-compiler plugin artifact (`slf4j-extensions-compiler`) is resolved by the
-Kotlin Gradle plugin machinery — consumers don't reference it directly.
-
 ## Release workflow (SNAPSHOT-first)
 
-All Kotlin patch releases go through 3 stages. Full details: [RELEASING.md](RELEASING.md).
+Three stages per Kotlin patch release. Full details: [RELEASING.md](RELEASING.md).
 
-1. **SNAPSHOT publish** — push to `{kotlinVersion}-release` branch with
-   `gradle.properties` `version={kotlinVersion}-SNAPSHOT`. The
-   `publish-snapshot.yml` workflow publishes to Central Portal snapshot repo
-   (`https://central.sonatype.com/repository/maven-snapshots/`). Re-pushable.
-2. **Downstream verification** — real consumer project (e.g., kovo-backend)
-   depends on `{kotlinVersion}-SNAPSHOT`, builds, tests, confirms.
-3. **Release publish** — bump `version={kotlinVersion}` (no suffix), commit,
-   tag `v{kotlinVersion}`, push both. The `publish.yml` workflow publishes
-   the release to Maven Central and creates a GitHub Release.
+1. **SNAPSHOT publish** — push to `{kotlinVersion}-release` with `version={kotlinVersion}-SNAPSHOT`. `publish-snapshot.yml` publishes to Central Portal snapshot repo. Re-pushable.
+2. **Downstream verification** — a real consumer (e.g. kovo-backend) depends on the SNAPSHOT, builds, tests, confirms.
+3. **Release publish** — bump `version={kotlinVersion}`, commit, tag `v{kotlinVersion}`, push both. `publish.yml` publishes to Maven Central and creates a GitHub Release. Safety check refuses SNAPSHOT inputs.
 
-Both workflows have safety checks that refuse the wrong version class
-(SNAPSHOT vs release). Repository URL is selected in `build.gradle.kts`
-by `version.endsWith("-SNAPSHOT")`.
-
-GitHub Actions secrets live in the `maven` environment:
-`SONATYPE_USERNAME`, `SONATYPE_PASSWORD`, `GPG_SECRET_KEY`,
-`GPG_PASSPHRASE`. The Central Portal namespace `io.github.harryjhin`
-must have "Enable SNAPSHOTs" turned on for stage 1 to succeed.
+GitHub Actions secrets in the `maven` environment: `SONATYPE_USERNAME`, `SONATYPE_PASSWORD`, `GPG_SECRET_KEY`, `GPG_PASSPHRASE`. Central Portal namespace `io.github.harryjhin` must have "Enable SNAPSHOTs" turned on.

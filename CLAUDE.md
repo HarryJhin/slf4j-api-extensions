@@ -1,131 +1,142 @@
-# slf4j-extensions (v1)
+# slf4j-ktx (Kotlin 1.9.25)
 
-Kotlin 1.x 전용 컴파일러 플러그인. SLF4J Logger와 로깅 함수를 클래스에 자동 주입.
+컴파일러 플러그인: `@Slf4j` 어노테이션이 붙은 Kotlin 클래스의 `Companion`(또는 `@Slf4j object` 자신)에 SLF4J `log: Logger` + `trace/debug/info/warn/error × 2`를 주입. 사용자 클래스 바디·슈퍼타입·생성자 불변.
 
-> **브랜치 전략** (kotlinx-serialization 패턴):
-> - `v1` — **Kotlin 1.x 전용** (현재 브랜치, 1.9.25). K1 only.
-> - `main` — Kotlin 2.x 전용 (K1 + K2).
-> - 한 브랜치에서 두 메이저 버전을 동시 관리하지 않음.
+> **브랜치**: `1.9.25-release` — 현재 Kotlin 1.9.25 재작성 진행 중. 레거시 `slf4j-extensions-*` 8개 모듈은 아직 공존(후속 step에서 제거 예정). 진행 스냅샷: [docs/REWRITE-PROGRESS.md](docs/REWRITE-PROGRESS.md). 설계: [docs/REWRITE-SPEC.md](docs/REWRITE-SPEC.md).
 
 ## Commands
 
 ```bash
-# 전체 빌드 + 모든 테스트
+# 전체 빌드
 ./gradlew clean build
 
-# runtime 모듈만 (38 tests)
-./gradlew :slf4j-extensions-runtime:test
+# 런타임 단위 테스트
+./gradlew :slf4j-ktx-core:test
 
-# 컴파일러 플러그인 box tests (K1, 10 tests)
-./gradlew :slf4j-extensions-cli:test
+# 컴파일러 박스 테스트 (K1 13 + K2 13 = 26)
+./gradlew :slf4j-ktx.cli:test
 
 # 개별 모듈 컴파일
-./gradlew :slf4j-extensions-k1:compileKotlin
-./gradlew :slf4j-extensions-backend:compileKotlin
-./gradlew :slf4j-extensions-cli:compileKotlin
-
-# 샘플 (composite build)
-cd sample && ../gradlew run
+./gradlew :slf4j-ktx.common:compileKotlin
+./gradlew :slf4j-ktx.k1:compileKotlin
+./gradlew :slf4j-ktx.k2:compileKotlin
+./gradlew :slf4j-ktx.backend:compileKotlin
+./gradlew :slf4j-ktx.cli:jar
+./gradlew :slf4j-ktx.embeddable:jar
+./gradlew :slf4j-ktx-gradle-plugin:jar
+./gradlew :slf4j-ktx-spring-gradle-plugin:jar
 ```
 
 ## Architecture
 
-멀티모듈 Gradle 프로젝트 (Kotlin 1.9.25, K1 only):
+Kotlin 1.9.25 (K1 + K2 둘 다 등록, 컴파일러가 `languageVersion`으로 선택):
 
 ```
-slf4j-extensions-common/         # 공유 상수 (PluginKey, ConfigKeys, PluginNames)
-slf4j-extensions-k1/             # K1 프론트엔드 (SyntheticResolveExtension)
-slf4j-extensions-backend/        # IR 변환 (IrVisitorVoid 기반)
-slf4j-extensions-cli/            # 진입점 (CommandLineProcessor + CompilerPluginRegistrar)
-slf4j-extensions-compiler/       # Fat JAR 패키징 (embedded 설정)
-slf4j-extensions-runtime/        # 사용자 런타임 (Logger/Marker/MDC 확장)
-slf4j-extensions-gradle-plugin/  # Gradle 플러그인 (KotlinCompilerPluginSupportPlugin)
-sample/                          # 통합 테스트 (composite build)
+slf4j-ktx.common/       # 공유 상수 (PluginKey, Config, EntityNames, Versions)
+slf4j-ktx.k1/           # K1 frontend — SyntheticResolveExtension + DescriptorSerializerPlugin + DeclarationChecker
+slf4j-ktx.k2/           # K2 FIR frontend — FirDeclarationGenerationExtension + FirClassChecker + VersionReader session component
+slf4j-ktx.backend/      # IR — Companion 멤버 body 생성 (log 초기화 + 레벨 함수)
+slf4j-ktx.cli/          # Register-All CompilerPluginRegistrar + CommandLineProcessor (box 테스트 실행 sourceSet)
+slf4j-ktx.embeddable/   # Fat JAR (embedded configuration + zipTree, shadow 미사용)
+slf4j-ktx-core/         # 런타임 — @Slf4j + Marker/MDC (독립 coreVersion)
+slf4j-ktx-gradle-plugin/          # 메인 Gradle plugin (slf4jKtx { } DSL)
+slf4j-ktx-spring-gradle-plugin/   # Spring Plugin<Project> (메인 auto-apply + 6개 stereotype FQN push)
+
+testData/box/                 # 박스 fixture 13개 (루트 레벨, serialization 패턴)
+testFixtures/kotlin/          # 테스트 러너 4개 (AbstractBoxTest × 2, Configurator, ClasspathProvider)
+tests-gen/                    # 수기 @TestMetadata 테스트 클래스 2개 (K1 + K2)
+sample/                       # 통합 테스트 — 아직 레거시 슬레이브 참조(후속 step에서 slf4j-ktx로 전환)
 ```
 
-**의존 방향:** cli → {k1, backend} → common. runtime / gradle-plugin 독립.
+**의존 방향:** cli → {k1, k2, backend} → common. runtime/gradle-plugin/spring-gradle-plugin 독립(core는 slf4j-api api 의존).
 
 ## Key Files
 
-- `slf4j-extensions-k1/.../Slf4jSyntheticResolveExtension.kt` — K1 descriptor 생성 (log 프로퍼티 + 5레벨×2오버로드)
-- `slf4j-extensions-backend/.../Slf4jIrTransformer.kt` — IR에서 backing field + getter + 함수 body 생성
-- `slf4j-extensions-cli/.../Slf4jExtensionsCompilerPluginRegistrar.kt` — K1 + IR 확장 등록 (`supportsK2 = false`)
-- `slf4j-extensions-cli/.../Slf4jExtensionsCommandLineProcessor.kt` — CLI 옵션 파싱
-- `slf4j-extensions-gradle-plugin/.../Slf4jExtensionsGradlePlugin.kt` — Gradle DSL + 컴파일러 플러그인 연결
-- `slf4j-extensions-runtime/.../LoggerExtensions.kt` — inline fun Logger.trace/debug/info/warn/error
+- `slf4j-ktx.k1/.../Slf4jKtxResolveExtension.kt` — K1 Companion 자동 생성 + log/레벨 함수 descriptor
+- `slf4j-ktx.k1/.../Slf4jKtxDescriptorResolver.kt` — K1 PropertyDescriptor/SimpleFunctionDescriptor 빌드
+- `slf4j-ktx.k2/.../Slf4jKtxFirResolveExtension.kt` — K2 Companion nested-class + callable + primary constructor
+- `slf4j-ktx.backend/.../Slf4jKtxIrGenerator.kt` — IR body (`if (log.isXxxEnabled) log.xxx(message(), throwable?)`), Companion/object FQN 결정
+- `slf4j-ktx.cli/.../Slf4jKtxComponentRegistrar.kt` — K1 + K2 + IR Register-All
+- `slf4j-ktx-core/.../Slf4j.kt` — 트리거 어노테이션
+- `slf4j-ktx-gradle-plugin/.../Slf4jKtxGradleSubplugin.kt` — `KotlinCompilerPluginSupportPlugin` + `slf4jKtx { annotation("…") }` DSL
+- `slf4j-ktx-spring-gradle-plugin/.../Slf4jKtxSpringGradleSubplugin.kt` — `Plugin<Project>` + Spring FQN 6개 push
 
 ## Environment
 
-- JDK 8+ (runtime target) — Adoptium toolchain 자동 다운로드 (foojay-resolver)
-- JDK 17+ (build) — Kotlin 1.9.25 컴파일러 실행에 필요
+- JDK 8+ (runtime target — Adoptium toolchain 자동 다운로드 via foojay-resolver)
+- JDK 17+ (build — Kotlin 1.9.25 컴파일러 실행용)
 - Gradle 8.8 (wrapper 포함)
 
 ## Compiler Plugin API (Kotlin 1.9.25)
 
-필수 opt-in: `ExperimentalCompilerApi`
+필수 opt-in: `ExperimentalCompilerApi` (컴파일러-대면 모듈에 build.gradle.kts 단위로 적용됨)
 
-- K1 SyntheticResolveExtension: `getSyntheticPropertiesNames`, `generateSyntheticProperties`, `generateSyntheticMethods` 구현
-- K1 선언 식별: `descriptor.kind == SYNTHESIZED` 또는 소유 클래스의 origin 조사 (kotlinx-serialization 패턴 참조)
-- IR 노드 생성: `DeclarationIrBuilder` + 빌더 DSL. 직접 Impl 생성자 호출 금지
-- IR body 패턴: `IrVisitorVoid` + `visitSimpleFunction` / `visitProperty`
-- 참고: `JetBrains/kotlin/plugins/kotlinx-serialization` (K1 패턴)
+### K1
+- `SyntheticResolveExtension`: `getSyntheticCompanionObjectNameIfNeeded` / `getSyntheticPropertiesNames/FunctionNames` / `generateSyntheticProperties/Methods`
+- **`thisDescriptor.companionObjectDescriptor` 쿼리 금지** — LockBasedStorageManager 재귀 유발 (serialization `SerializationResolveExtension.kt:66-70` 주석 참조). Kotlin 런타임이 Companion 없는 class에만 훅을 호출하므로 guard 불필요.
+- 선언 식별: `descriptor.kind == CallableMemberDescriptor.Kind.SYNTHESIZED`
+- 진단: `StorageComponentContainerContributor` + `DeclarationChecker` + `Errors.Initializer.initializeFactoryNamesAndDefaultErrorMessages`
+
+### K2 (FIR)
+- `FirDeclarationGenerationExtension`: `getNestedClassifiersNames` + `generateNestedClassLikeDeclaration` (`createCompanionObject(owner, pluginKey)`) → `getCallableNamesForClass` + `generateProperties/generateFunctions`
+- **plugin-synthesized Companion에는 `generateConstructors` override 필수**. `createCompanionObject`만으로는 primary constructor가 emit되지 않아 `ObjectClassLowering`이 "Object should have a primary constructor: Companion" 실패. `getCallableNamesForClass`에서 `SpecialNames.INIT`을 plugin origin 시에만 추가하고 `generateConstructors`에서 `createDefaultPrivateConstructor(owner, Slf4jKtxPluginKey)` 반환 (serialization `SerializationFirResolveExtension.kt:99, 296-300` 패턴).
+- Kotlin 1.9.25 부재 API: `FirMetadataSerializerPlugin`, `MppCheckerKind`, `registerDiagnosticContainers`, `FirClassLikeSymbol.sourceElement`. 각각 K1 `DescriptorSerializerPlugin`, `FirClassChecker()` no-arg, `RootDiagnosticRendererFactory.registerFactory` self-registration, stub 으로 대체.
+- 진단 렌더러: `KtDiagnosticFactoryToRendererMap` 패키지는 `org.jetbrains.kotlin.diagnostics` (not `.rendering`), `CommonRenderers.STRING` (not `Renderers.STRING`)
+- `isCompanion` import: `org.jetbrains.kotlin.fir.declarations.utils.isCompanion`
+
+### IR
+- `IrElementVisitorVoid` (deprecated 표기지만 1.9.25 기본) + `visitProperty` / `visitSimpleFunction`
+- 선언 식별(`isFromPlugin(afterK2)`): K1이면 `SYNTHESIZED`, K2면 `IrDeclarationOrigin.GeneratedByPlugin(Slf4jKtxPluginKey)`
+- `@ObsoleteDescriptorBasedAPI`는 함수 레벨 `@OptIn`만 (전역 opt-in 금지)
+- Java stub `IrClassSymbol` vs Kotlin builtin `IrClassSymbol` 다름 — `owner.name.asString()` 이름 비교 사용. `referenceClass` + `declarations` 순회로 심볼 탐색(`referenceFunctions`는 Java static 못 찾음).
+- K1 synthetic property의 backing field는 psi2ir에서 생성 안 됨 → IR에서 `createField`로 동적 생성 + getter body도 IR에서 명시 생성.
 
 ## Testing
 
-**Runtime tests**: `slf4j-test` (valfirst 3.0.x) + JUnit 5 — 38 tests
-**Compiler box tests**: `kotlin-compiler-internal-test-framework:1.9.25` — 10 tests (K1 only)
-- `testData/box/*.kt` — `fun box(): String` 반환값 `"OK"`이면 통과
-- `K1BoxTestGenerated` → `AbstractK1BoxTest` (AbstractIrBlackBoxCodegenTest)
+**런타임 단위** (`slf4j-ktx-core:test`): slf4j-test (valfirst 3.0.x) + JUnit 5.
 
-## Gotchas
+**박스 테스트** (`slf4j-ktx.cli:test`): `kotlin-compiler-internal-test-framework:1.9.25` — K1 13 + K2 13.
+- `testData/box/*.kt` (루트) — `fun box(): String` 반환 `"OK"` 규칙.
+- 러너 in `testFixtures/kotlin/.../runners/`: `AbstractSlf4jKtxK1BoxTest` (`AbstractIrBlackBoxCodegenTest`), `AbstractSlf4jKtxFirLightTreeBoxTest` (`AbstractFirLightTreeBlackBoxCodegenTest`).
+- `generateTestGroupSuiteWithJUnit5` API는 Maven Central 미배포 → `tests-gen/`의 `K1BoxTestGenerated` / `FirLightTreeBoxTestGenerated`는 **수기 `@TestMetadata`**. 신규 fixture 추가 시 두 파일 모두 수동 갱신.
+- **범위 밖(후속 작업)**: `customAnnotation`, `springService`(CLI option directive 필요), `runtimeMissing`, `runtimeTooOld`(diagnostics 테스트 인프라 필요).
 
-### K1 Descriptor
-- `PropertyGetterDescriptorImpl`을 직접 생성하고 `initialize(returnType)` 호출 — `DescriptorFactory.createDefaultGetter`는 returnType 미설정
-- `SimpleFunctionDescriptorImpl.create`에 `thisDescriptor.source` 사용 — `SourceElement.NO_SOURCE`는 psi2ir 크래시 유발
-- K1 synthetic property의 backing field는 psi2ir에서 생성 안 됨 → IR에서 `createField`로 동적 생성
-- K1 property getter body도 IR에서 명시 생성 필요
-
-### IR
-- Java stub `IrClassSymbol`과 Kotlin builtin `IrClassSymbol`은 다른 인스턴스 — `owner.name.asString()` 이름 비교 사용
-- `referenceClass` + `declarations` 순회로 심볼 탐색 — `referenceFunctions`는 Java static 메서드 못 찾음
-- `@ObsoleteDescriptorBasedAPI`는 함수 레벨 `@OptIn`만 사용 (전역 opt-in 금지)
-
-### 테스트
-- 외부 라이브러리 타입 → `EnvironmentConfigurator.configureCompilerConfiguration`에서 `addJvmClasspathRoot` + `RuntimeClasspathProvider`
-- box test에 `// FULL_JDK` 디렉티브 필요 — JDK 타입 사용 시
-- `kotlin-compiler` (non-embeddable) vs `kotlin-compiler-embeddable` — 테스트에선 non-embeddable, 메인 소스에선 embeddable
+### Fixture 작성 규칙
+- `// WITH_STDLIB` + `// FULL_JDK` 디렉티브 필요.
+- `import io.github.harryjhin.slf4j.ktx.Slf4j`
+- Companion 멤버가 class 바디에서 unqualified 접근됨 (`trace { }`). 콜 사이트가 nested class나 subclass면 해당 클래스에도 `@Slf4j` 필요.
 
 ## Publishing
 
 - **Group:** `io.github.harryjhin`
-- **Version 패턴:** 플러그인 버전 = Kotlin 버전 (예: `1.9.25`)
-- **배포 대상:** `slf4j-extensions-runtime`, `slf4j-extensions-compiler`, `slf4j-extensions-gradle-plugin`
-- **서명:** non-SNAPSHOT 버전만 GPG 서명 필수 (`signingInMemoryKey` 기반)
+- **배포 대상:** `slf4j-ktx-core`, `slf4j-ktx-compiler-plugin-embeddable`, `slf4j-ktx-gradle-plugin`, `slf4j-ktx-spring-gradle-plugin`
+- **버전 축:**
+  - `version` (= `kotlinVersion`) — 플러그인 + embeddable + gradle plugins
+  - `coreVersion` — `slf4j-ktx-core` 독립 cadence (시작 `0.1.0`)
+  - `requireKotlin` — core JAR manifest에 stamp, 플러그인 VersionReader가 `COMPILER_TOO_OLD` 진단 시 사용
+- **서명:** non-SNAPSHOT 버전만 GPG 필수 (`signingInMemoryKey` 기반)
 - **Central Portal 전제:** namespace `io.github.harryjhin`에 "Enable SNAPSHOTs" 활성화됨
 - **GitHub Actions secrets (`maven` environment):** `SONATYPE_USERNAME`, `SONATYPE_PASSWORD`, `GPG_SECRET_KEY`, `GPG_PASSPHRASE`
 
 ### Release 플로우 (SNAPSHOT → 검증 → Release)
 
-모든 Kotlin 패치 릴리즈는 3단계. 상세는 [RELEASING.md](RELEASING.md).
+3단계. 상세는 [RELEASING.md](RELEASING.md).
 
 | 단계 | 트리거 | 워크플로우 | 결과 |
 |------|--------|-----------|------|
-| 1. SNAPSHOT publish | `{version}-release` 브랜치 push (`gradle.properties` `version=X-SNAPSHOT`) | `publish-snapshot.yml` | `X-SNAPSHOT` → Central Portal snapshot repo |
-| 2. 다운스트림 검증 | 수동 | — | 실 애플리케이션(kovo-backend 등)이 `X-SNAPSHOT` 의존성으로 빌드·테스트 |
-| 3. Release publish | `v{version}` 태그 push (`gradle.properties` `version=X`) | `publish.yml` | `X` → Maven Central + GitHub Release |
+| 1. SNAPSHOT publish | `{kotlinVersion}-release` 브랜치 push (`version=X-SNAPSHOT`) | `publish-snapshot.yml` | 모든 아티팩트 → Central Portal snapshot repo |
+| 2. 다운스트림 검증 | 수동 | — | kovo-backend 등이 SNAPSHOT 의존성으로 빌드·테스트 |
+| 3. Release publish | `v{kotlinVersion}` 태그 push (`version=X`) | `publish.yml` | Maven Central + GitHub Release |
 
-**Safety checks (워크플로우 내 자동):**
-- `publish-snapshot.yml`: version이 `-SNAPSHOT` 아니면 실행 거부
-- `publish.yml`: version이 `-SNAPSHOT`이면 실행 거부
+**Safety:** `publish-snapshot.yml`는 version이 `-SNAPSHOT` 아니면 거부; `publish.yml`는 `-SNAPSHOT`이면 거부.
 
-**Repository URL 분기** (`build.gradle.kts`): `version.endsWith("-SNAPSHOT")`에 따라
+**Repository URL 분기** (`build.gradle.kts`): `version.endsWith("-SNAPSHOT")` 기준
 - SNAPSHOT → `https://central.sonatype.com/repository/maven-snapshots/`
 - Release → `https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/`
 
-**SNAPSHOT 재배포:** 같은 버전으로 덮어쓰기 가능. 릴리즈는 불가(태그·버전 1회성).
-
 ## Git
 
-- `master` — 구버전 레거시 (단일 모듈 시절)
+- `master` — 구버전 레거시
 - `main` — Kotlin 2.x 전용 (K1 + K2)
-- `v1` — **현재 브랜치** — Kotlin 1.5~1.9 지원 (K1 only)
+- `1.9.25-release` — **현재 브랜치** — Kotlin 1.9.25 재작성 진행 중 (`slf4j-extensions` → `slf4j-ktx`)
+- `v1` — Kotlin 1.5~1.9 (슬레이브, 이전 구조 유지)

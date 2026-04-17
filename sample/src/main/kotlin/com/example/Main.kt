@@ -1,5 +1,8 @@
 package com.example
 
+import io.github.harryjhin.slf4j.ktx.Slf4j
+
+@Slf4j
 class OrderService {
     fun process(orderId: String) {
         trace { "processing order: $orderId" }
@@ -8,6 +11,5 @@ class OrderService {
 }
 
 fun main() {
-    val service = OrderService()
-    service.process("ORD-001")
+    OrderService().process("ORD-001")
 }
