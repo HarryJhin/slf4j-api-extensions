@@ -14,6 +14,19 @@ class Slf4jExtensionsGradlePlugin : KotlinCompilerPluginSupportPlugin {
         private const val PLUGIN_ID = "io.github.harryjhin.slf4j-extensions"
         private const val GROUP_ID = "io.github.harryjhin"
         private const val COMPILER_ARTIFACT_ID = "slf4j-extensions-compiler"
+
+        // Read plugin version from the properties file generated at build time
+        // (see build.gradle.kts `generatePluginVersionProperties` task).
+        private val PLUGIN_VERSION: String by lazy {
+            val resource = "/io/github/harryjhin/slf4j/extensions/gradle/version.properties"
+            val stream = Slf4jExtensionsGradlePlugin::class.java.getResourceAsStream(resource)
+                ?: error("slf4j-extensions Gradle plugin missing $resource — rebuild required")
+            stream.use { input ->
+                val props = java.util.Properties().apply { load(input) }
+                props.getProperty("version")
+                    ?: error("version not found in $resource")
+            }
+        }
     }
 
     override fun apply(target: Project) {
@@ -49,5 +62,5 @@ class Slf4jExtensionsGradlePlugin : KotlinCompilerPluginSupportPlugin {
     override fun getCompilerPluginId(): String = PLUGIN_ID
 
     override fun getPluginArtifact(): SubpluginArtifact =
-        SubpluginArtifact(GROUP_ID, COMPILER_ARTIFACT_ID)
+        SubpluginArtifact(GROUP_ID, COMPILER_ARTIFACT_ID, PLUGIN_VERSION)
 }
