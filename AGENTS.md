@@ -104,3 +104,26 @@ cd sample && ../gradlew run               # Integration test
 - Kotlin source in English, comments in Korean where needed
 - No wildcard imports in production code
 - `@OptIn` annotations at function level, not global (except `ExperimentalCompilerApi`)
+
+## Release workflow (SNAPSHOT-first)
+
+All Kotlin patch releases go through 3 stages. Full details: [RELEASING.md](RELEASING.md).
+
+1. **SNAPSHOT publish** — push to `{kotlinVersion}-release` branch with
+   `gradle.properties` `version={kotlinVersion}-SNAPSHOT`. The
+   `publish-snapshot.yml` workflow publishes to Central Portal snapshot repo
+   (`https://central.sonatype.com/repository/maven-snapshots/`). Re-pushable.
+2. **Downstream verification** — real consumer project (e.g., kovo-backend)
+   depends on `{kotlinVersion}-SNAPSHOT`, builds, tests, confirms.
+3. **Release publish** — bump `version={kotlinVersion}` (no suffix), commit,
+   tag `v{kotlinVersion}`, push both. The `publish.yml` workflow publishes
+   the release to Maven Central and creates a GitHub Release.
+
+Both workflows have safety checks that refuse the wrong version class
+(SNAPSHOT vs release). Repository URL is selected in `build.gradle.kts`
+by `version.endsWith("-SNAPSHOT")`.
+
+GitHub Actions secrets live in the `maven` environment:
+`SONATYPE_USERNAME`, `SONATYPE_PASSWORD`, `GPG_SECRET_KEY`,
+`GPG_PASSPHRASE`. The Central Portal namespace `io.github.harryjhin`
+must have "Enable SNAPSHOTs" turned on for stage 1 to succeed.

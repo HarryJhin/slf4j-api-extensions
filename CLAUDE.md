@@ -98,10 +98,31 @@ sample/                          # 통합 테스트 (composite build)
 ## Publishing
 
 - **Group:** `io.github.harryjhin`
-- **Version:** `1.9.25-SNAPSHOT` (플러그인 버전 = Kotlin 버전)
+- **Version 패턴:** 플러그인 버전 = Kotlin 버전 (예: `1.9.25`)
 - **배포 대상:** `slf4j-extensions-runtime`, `slf4j-extensions-compiler`, `slf4j-extensions-gradle-plugin`
-- **저장소:** Maven Central (Sonatype OSSRH staging API)
-- **서명:** non-SNAPSHOT 버전만 GPG 서명 필수
+- **서명:** non-SNAPSHOT 버전만 GPG 서명 필수 (`signingInMemoryKey` 기반)
+- **Central Portal 전제:** namespace `io.github.harryjhin`에 "Enable SNAPSHOTs" 활성화됨
+- **GitHub Actions secrets (`maven` environment):** `SONATYPE_USERNAME`, `SONATYPE_PASSWORD`, `GPG_SECRET_KEY`, `GPG_PASSPHRASE`
+
+### Release 플로우 (SNAPSHOT → 검증 → Release)
+
+모든 Kotlin 패치 릴리즈는 3단계. 상세는 [RELEASING.md](RELEASING.md).
+
+| 단계 | 트리거 | 워크플로우 | 결과 |
+|------|--------|-----------|------|
+| 1. SNAPSHOT publish | `{version}-release` 브랜치 push (`gradle.properties` `version=X-SNAPSHOT`) | `publish-snapshot.yml` | `X-SNAPSHOT` → Central Portal snapshot repo |
+| 2. 다운스트림 검증 | 수동 | — | 실 애플리케이션(kovo-backend 등)이 `X-SNAPSHOT` 의존성으로 빌드·테스트 |
+| 3. Release publish | `v{version}` 태그 push (`gradle.properties` `version=X`) | `publish.yml` | `X` → Maven Central + GitHub Release |
+
+**Safety checks (워크플로우 내 자동):**
+- `publish-snapshot.yml`: version이 `-SNAPSHOT` 아니면 실행 거부
+- `publish.yml`: version이 `-SNAPSHOT`이면 실행 거부
+
+**Repository URL 분기** (`build.gradle.kts`): `version.endsWith("-SNAPSHOT")`에 따라
+- SNAPSHOT → `https://central.sonatype.com/repository/maven-snapshots/`
+- Release → `https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/`
+
+**SNAPSHOT 재배포:** 같은 버전으로 덮어쓰기 가능. 릴리즈는 불가(태그·버전 1회성).
 
 ## Git
 
