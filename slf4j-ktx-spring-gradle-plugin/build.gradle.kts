@@ -8,9 +8,19 @@ description = "Spring integration plugin that auto-applies slf4j-ktx and adds Sp
 val kotlinVersion: String by project
 
 dependencies {
+    // Needed for Kotlin to resolve Slf4jKtxGradleSubplugin's supertype
+    // (KotlinCompilerPluginSupportPlugin) during `plugins.apply(...::class.java)` overload resolution.
     compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin-api:$kotlinVersion")
-    compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
     implementation(project(":slf4j-ktx-gradle-plugin"))
 }
 
-// Plugin descriptor wired up in Step 11.
+gradlePlugin {
+    plugins {
+        create("slf4jKtxSpring") {
+            id = "io.github.harryjhin.slf4j-ktx.spring"
+            displayName = "slf4j-ktx Spring integration"
+            description = "Auto-applies slf4j-ktx and triggers on Spring stereotypes (@Component, @Controller, @Service, @Repository, @RestController, @ControllerAdvice)"
+            implementationClass = "io.github.harryjhin.slf4j.ktx.spring.gradle.Slf4jKtxSpringGradleSubplugin"
+        }
+    }
+}

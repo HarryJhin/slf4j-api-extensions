@@ -9,7 +9,15 @@ val kotlinVersion: String by project
 
 dependencies {
     compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin-api:$kotlinVersion")
-    compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
 }
 
-// Plugin descriptor wired up in Step 10.
+gradlePlugin {
+    plugins {
+        create("slf4jKtx") {
+            id = "io.github.harryjhin.slf4j-ktx"
+            displayName = "slf4j-ktx Kotlin compiler plugin"
+            description = "Kotlin compiler plugin that injects SLF4J Logger into annotated classes"
+            implementationClass = "io.github.harryjhin.slf4j.ktx.gradle.Slf4jKtxGradleSubplugin"
+        }
+    }
+}
