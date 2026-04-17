@@ -5,16 +5,20 @@ import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
+import org.jetbrains.kotlin.descriptors.ModuleDescriptor
 import org.jetbrains.kotlin.descriptors.PackageFragmentDescriptor
 import org.jetbrains.kotlin.descriptors.PropertyDescriptor
 import org.jetbrains.kotlin.descriptors.SimpleFunctionDescriptor
 import org.jetbrains.kotlin.descriptors.SourceElement
+import org.jetbrains.kotlin.descriptors.annotations.AnnotationDescriptorImpl
 import org.jetbrains.kotlin.descriptors.annotations.Annotations
+import org.jetbrains.kotlin.descriptors.findClassAcrossModuleDependencies
 import org.jetbrains.kotlin.descriptors.impl.PropertyDescriptorImpl
 import org.jetbrains.kotlin.descriptors.impl.PropertyGetterDescriptorImpl
 import org.jetbrains.kotlin.descriptors.impl.SimpleFunctionDescriptorImpl
 import org.jetbrains.kotlin.descriptors.impl.ValueParameterDescriptorImpl
 import org.jetbrains.kotlin.incremental.components.NoLookupLocation
+import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.resolve.BindingContext
@@ -67,9 +71,11 @@ class Slf4jSyntheticResolveExtension(
             ) as? ClassDescriptor ?: return
         val loggerType = loggerDescriptor.defaultType
 
+        val jvmSynthetic = jvmSyntheticAnnotations(thisDescriptor.module)
+
         val property = PropertyDescriptorImpl.create(
             thisDescriptor,
-            Annotations.EMPTY,
+            jvmSynthetic,
             Modality.FINAL,
             DescriptorVisibilities.PRIVATE,
             false,
@@ -92,7 +98,7 @@ class Slf4jSyntheticResolveExtension(
         )
 
         val getter = PropertyGetterDescriptorImpl(
-            property, Annotations.EMPTY, Modality.FINAL, DescriptorVisibilities.PRIVATE,
+            property, jvmSynthetic, Modality.FINAL, DescriptorVisibilities.PRIVATE,
             false, false, false,
             CallableMemberDescriptor.Kind.SYNTHESIZED, null, thisDescriptor.source,
         )
@@ -123,10 +129,12 @@ class Slf4jSyntheticResolveExtension(
             listOf(TypeProjectionImpl(stringType)),
         )
 
+        val jvmSynthetic = jvmSyntheticAnnotations(thisDescriptor.module)
+
         // fun trace(message: () -> String)
         val simpleFunc = SimpleFunctionDescriptorImpl.create(
             thisDescriptor,
-            Annotations.EMPTY,
+            jvmSynthetic,
             name,
             CallableMemberDescriptor.Kind.SYNTHESIZED,
             thisDescriptor.source,
@@ -153,7 +161,7 @@ class Slf4jSyntheticResolveExtension(
         // fun trace(throwable: Throwable, message: () -> String)
         val throwableFunc = SimpleFunctionDescriptorImpl.create(
             thisDescriptor,
-            Annotations.EMPTY,
+            jvmSynthetic,
             name,
             CallableMemberDescriptor.Kind.SYNTHESIZED,
             thisDescriptor.source,
@@ -181,6 +189,27 @@ class Slf4jSyntheticResolveExtension(
         )
         throwableFunc.setReturnType(unitType)
         result.add(throwableFunc)
+    }
+
+    /**
+     * Builds an [Annotations] instance containing a single `@kotlin.jvm.JvmSynthetic`
+     * annotation. Synthetic members carry this so kapt-generated Java stubs omit
+     * them entirely, which avoids downstream annotation processors (QueryDSL APT,
+     * etc.) picking up the injected `log` property as a queryable field.
+     */
+    private fun jvmSyntheticAnnotations(module: ModuleDescriptor): Annotations {
+        val classId = ClassId(FqName("kotlin.jvm"), Name.identifier("JvmSynthetic"))
+        val jvmSyntheticClass = module.findClassAcrossModuleDependencies(classId)
+            ?: return Annotations.EMPTY
+        return Annotations.create(
+            listOf(
+                AnnotationDescriptorImpl(
+                    jvmSyntheticClass.defaultType,
+                    emptyMap(),
+                    SourceElement.NO_SOURCE,
+                ),
+            ),
+        )
     }
 
     private fun shouldGenerateFor(descriptor: ClassDescriptor): Boolean {
