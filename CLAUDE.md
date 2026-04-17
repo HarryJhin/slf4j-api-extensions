@@ -1,6 +1,10 @@
 # slf4j-ktx (Kotlin 1.9.25)
 
-컴파일러 플러그인: `@Slf4j` 어노테이션이 붙은 Kotlin 클래스의 `Companion`(또는 `@Slf4j object` 자신)에 SLF4J `log: Logger` + `trace/debug/info/warn/error × 2`를 주입. 사용자 클래스 바디·슈퍼타입·생성자 불변.
+컴파일러 플러그인 + runtime library. Runtime의 `T.<level> { }` 확장함수가 기본 body(SLF4J LoggerFactory cache lookup)를 제공하므로 **core는 standalone으로도 동작**. Plugin은 `@Slf4j`(또는 Spring/custom trigger) 붙은 class의 호출부를 **IR에서 Companion.log static field 직접 접근으로 치환** — per-call cache lookup 제거. Plugin의 현 역할은 Companion `log` synthesis + call-site IR rewrite. 두 기능 모두 IDE엔 invisible (의도).
+
+**릴리즈 정책**: `slf4j-ktx-core` 만 Maven Central 정식 배포 (독립 `coreVersion` semver). Plugin 3종은 SNAPSHOT 전용 — JetBrains 3rd-party 컴파일러 플러그인 IDE 통합 경로가 열릴 때까지 정식 릴리즈 연기. 상세: [RELEASING.md](RELEASING.md).
+
+**플러그인의 장기 설계 의도**: 현재는 JetBrains 3rd-party IDE 지원 부재로 최적화 범위로 축소. 공식 stable API 또는 IDE plugin bundled 경로가 열리면 IDE-facing synthetic `log` 등 kotlinx-serialization 수준 surface로 확장 예정. 배경: [Kotlin Discussions FIR plugin & IDE](https://discuss.kotlinlang.org/t/fir-plugin-and-ide-integration/29384), [KT-23696](https://youtrack.jetbrains.com/issue/KT-23696), [KEFS](https://plugins.jetbrains.com/plugin/26480-kotlin-external-fir-support).
 
 > **브랜치**: `1.9.25-release` — 현재 Kotlin 1.9.25 재작성 진행 중. 레거시 `slf4j-extensions-*` 8개 모듈은 아직 공존(후속 step에서 제거 예정). 진행 스냅샷: [docs/REWRITE-PROGRESS.md](docs/REWRITE-PROGRESS.md). 설계: [docs/REWRITE-SPEC.md](docs/REWRITE-SPEC.md).
 

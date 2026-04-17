@@ -4,9 +4,13 @@
 [![SLF4J](https://img.shields.io/badge/SLF4J-1.7.36%2B-blue.svg)](https://www.slf4j.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-> **Branch `1.9.25-release`** — active rewrite. The old `slf4j-extensions` modules are being retired in favor of `slf4j-ktx` (Companion-centric synthesis, opt-in `@Slf4j`, Spring plugin, K2 support). Upgrade notes: [CHANGELOG.md](CHANGELOG.md).
+한국어: [README.ko.md](README.ko.md)
 
-**Zero-boilerplate SLF4J logging** for Kotlin. Annotate a class with `@Slf4j` and call `info { "msg" }` directly — the compiler plugin puts the Logger and level functions on the class's `Companion` for you.
+> **Branch `1.9.25-release`** — Kotlin 1.9.25 paired release. Design migrated from `slf4j-extensions` (Companion-member synthesis) to a smaller, IDE-friendly surface: runtime `T.<level>{}` extensions + IR call-site rewriting on `@Slf4j`-annotated classes. See [CHANGELOG.md](CHANGELOG.md) for migration notes.
+>
+> **Release status**: only `slf4j-ktx-core` ships as a stable Maven Central release. The compiler-plugin artifacts (`slf4j-ktx-compiler-plugin-embeddable`, `slf4j-ktx-gradle-plugin`, `slf4j-ktx-spring-gradle-plugin`) are **SNAPSHOT-only** — stable release is deferred until JetBrains provides a first-class IDE integration story for third-party compiler plugins. See [RELEASING.md](RELEASING.md) for the reasoning.
+
+**Zero-boilerplate SLF4J logging** for Kotlin. Annotate a class with `@Slf4j` and call `info { "msg" }` directly. The compiler plugin rewrites each call to a direct static-field access against a pre-generated `Logger`. Classes without `@Slf4j` still compile and work — they fall through to the runtime extension's body (`LoggerFactory.getLogger(T::class.java)`).
 
 ## The Problem
 
@@ -22,12 +26,12 @@ class OrderService {
 }
 ```
 
-Same Logger boilerplate in every class. Manual `isXxxEnabled` checks to avoid unused string concatenation.
+Logger boilerplate in every class. Manual `isXxxEnabled` to avoid unused string formatting.
 
 ## The Solution
 
 ```kotlin
-import io.github.harryjhin.slf4j.ktx.Slf4j
+import io.github.harryjhin.slf4j.ktx.*
 
 @Slf4j
 class OrderService {
@@ -39,67 +43,56 @@ class OrderService {
 }
 ```
 
-- **Companion-injected** — plugin never touches the user class body. `log`, `trace`, `debug`, `info`, `warn`, `error × 2` live on `OrderService.Companion` (auto-generated if absent).
-- **Lazy** — `if (log.isXxxEnabled) log.xxx(message())`. Lambda is not evaluated when the level is disabled.
+- **No Logger declaration** — the plugin synthesizes a `log: Logger` property on `OrderService.Companion`.
+- **Lazy** — the message lambda only runs when the level is enabled.
 - **Correct Logger name** — `LoggerFactory.getLogger("com.example.OrderService")`, enclosing class FQN.
-- **Compile-time only** — no runtime reflection, no class-graph scanning.
+- **IDE-friendly** — `trace { … }` / `info { … }` resolve against real top-level extensions, so no red squiggles. Compile-time IR rewriting replaces the call with a direct static-field access when the enclosing class carries `@Slf4j`.
 
 ## Quick Start
 
 ```kotlin
 plugins {
     kotlin("jvm") version "1.9.25"
-    id("io.github.harryjhin.slf4j-ktx") version "1.9.25"   // plugin ver ≡ Kotlin ver
+    id("io.github.harryjhin.slf4j-ktx") version "1.9.25"
 }
 
 dependencies {
-    implementation("io.github.harryjhin:slf4j-ktx-core:0.1.0")   // @Slf4j annotation + Marker/MDC utils
-    runtimeOnly("org.slf4j:slf4j-simple:2.0.13")                 // or your preferred SLF4J binding
+    implementation("io.github.harryjhin:slf4j-ktx-core:0.1.0")
+    runtimeOnly("org.slf4j:slf4j-simple:2.0.13")    // or any SLF4J binding
 }
 ```
 
-Annotate classes that need logging:
+In each file that logs, import the level extensions:
 
 ```kotlin
-import io.github.harryjhin.slf4j.ktx.Slf4j
-
-@Slf4j
-class MyService {
-    fun doWork() {
-        info { "hello" }
-    }
-}
+import io.github.harryjhin.slf4j.ktx.*
 ```
 
-## Object-level logging
+Annotate classes that need logging with `@Slf4j`.
+
+## Patterns
+
+### Object-level logging
 
 ```kotlin
 @Slf4j
 object Registry {
     fun reload() {
-        info { "reload start" }   // injected directly onto the object
+        info { "reload start" }   // members are injected onto the object itself
     }
 }
 ```
 
-`object` declarations are already singletons — no Companion needed. The plugin injects members directly.
-
-## Custom trigger annotations
+### Throwable overload
 
 ```kotlin
-slf4jKtx {
-    annotation("com.example.LoggedDomain")
-}
-
-@LoggedDomain
-class ReportGenerator {
-    fun run() { info { "…" } }
-}
+try { riskyOperation() }
+catch (e: Exception) { error(e) { "operation failed" } }
 ```
 
-## Meta-annotation (1-hop)
+### Meta-annotation (1-hop)
 
-`@Slf4j` on your own annotation makes that annotation a trigger.
+Apply `@Slf4j` to your own annotation to turn it into a trigger:
 
 ```kotlin
 @Slf4j
@@ -111,11 +104,11 @@ class OrderService {
 }
 ```
 
-## Spring integration
+### Spring integration
 
 ```kotlin
 plugins {
-    id("io.github.harryjhin.slf4j-ktx.spring") version "1.9.25"   // auto-applies main plugin
+    id("io.github.harryjhin.slf4j-ktx.spring") version "1.9.25"
 }
 
 @Service
@@ -124,68 +117,128 @@ class OrderService {
 }
 ```
 
-The Spring plugin contributes six stereotype FQNs (`@Component`, `@Controller`, `@Service`, `@Repository`, `@RestController`, `@ControllerAdvice`) as triggers. You can still add your own via `slf4jKtx { annotation("…") }`.
+The Spring integration plugin auto-applies the main plugin and adds six Spring stereotype FQNs as triggers: `@Component`, `@Controller`, `@Service`, `@Repository`, `@RestController`, `@ControllerAdvice`.
 
-## Throwable and MDC
+### Custom triggers
 
 ```kotlin
-try { riskyOperation() }
-catch (e: Exception) { error(e) { "operation failed" } }
-
-withMDC("requestId" to "abc-123") {
-    info { "processing" }  // MDC contains requestId
-}                          // MDC restored on exit
+slf4jKtx {
+    annotation("com.example.LoggedDomain")
+}
 ```
 
-## Marker
+Entries combine with `@Slf4j` and (if enabled) with Spring stereotypes.
 
-Marker-qualified overloads stay in the runtime (not on the Companion — they have their own shape).
+### Marker-qualified logging
+
+The Marker-qualified overloads are `Logger`-receiver extensions (unlike the plain `T.<level>` extensions, which expose lambda sugar):
 
 ```kotlin
-import io.github.harryjhin.slf4j.ktx.trace
+import io.github.harryjhin.slf4j.ktx.*
 import org.slf4j.MarkerFactory
 
 val AUDIT = MarkerFactory.getMarker("AUDIT")
 
 @Slf4j
 class Audit {
-    fun record() {
-        log.trace(AUDIT) { "user logged in: $userId" }   // `log` is the internal Companion property
+    fun record(userId: String) {
+        log.trace(AUDIT) { "user logged in: $userId" }   // `log` is the synthesized internal property
     }
 }
 ```
 
-## `kotlin.error()` disambiguation
+Note: `log` is synthesized at IR time and has `internal` visibility. Your IDE will mark it as unresolved (this is a third-party compiler plugin limitation that does not affect compilation). Prefer the lambda-sugar level extensions where a Marker is not needed.
+
+### MDC scoping
 
 ```kotlin
-error("msg")    // kotlin.error(Any) → throws IllegalStateException
-error { "msg" } // Companion.error(() -> String) → logs at ERROR level
+import io.github.harryjhin.slf4j.ktx.*
+
+withMDC("requestId" to requestId, "userId" to userId) {
+    info { "processing" }   // requestId / userId visible to appender
+}                           // MDC restored on exit (including on exception)
 ```
 
-Different call syntax, no resolution ambiguity.
+### `kotlin.error()` disambiguation
 
-## Where members are visible
+```kotlin
+error("msg")          // → kotlin.error(Any) → throws IllegalStateException
+error { "msg" }       // → T.error(() -> String) → logs at ERROR level
+error(e) { "msg" }    // → T.error(Throwable, () -> String) → logs with throwable
+```
 
-Companion members are accessible **unqualified from the enclosing class body**. Everything else needs its own `@Slf4j`.
+Different argument shapes — no resolution ambiguity.
 
-| Context | `info { "…" }` unqualified? |
-|---|---|
-| Member function of the annotated class | Yes |
-| Local function inside such a member | Yes |
-| Nested class (must carry its own `@Slf4j`) | No |
-| Subclass body (parent's Companion does not inherit) | No |
-| Top-level function | No |
+## Where the extensions are visible
 
-## Modules
+`T.<level>` extensions resolve against any receiver `T : Any`, so calling `info { }` works inside any class body. What changes is whether the plugin rewrites the call:
+
+| Context | Call resolves? | Plugin rewrites? | Result |
+|---|---|---|---|
+| Member of `@Slf4j`-annotated class / object | yes | **yes** | direct `Companion.log` access — no reflection, no cache lookup |
+| Member of non-triggered class | yes | no | runtime body — `LoggerFactory.getLogger(T::class.java)` cache lookup |
+| Top-level function | no (no receiver) | — | compile error; add `@Slf4j` to an enclosing class |
+
+## Modules (published)
 
 | Artifact | Purpose |
 |---|---|
-| `io.github.harryjhin:slf4j-ktx-core` | `@Slf4j` annotation + Marker/MDC runtime extensions. Separate cadence (`coreVersion`). |
+| `io.github.harryjhin:slf4j-ktx-core` | `@Slf4j` annotation + `T.<level>` / Marker / MDC runtime extensions. Independent cadence (`coreVersion`). |
 | `io.github.harryjhin:slf4j-ktx-compiler-plugin-embeddable` | Compiler plugin fat JAR. Resolved automatically by the Gradle plugin. |
 | `io.github.harryjhin:slf4j-ktx-gradle-plugin` | Main Gradle plugin (`slf4jKtx { }` DSL). |
-| `io.github.harryjhin:slf4j-ktx-spring-gradle-plugin` | Spring integration (auto-applies main + Spring stereotype FQNs). |
+| `io.github.harryjhin:slf4j-ktx-spring-gradle-plugin` | Spring integration Gradle plugin. |
 
 Internal compiler modules (`slf4j-ktx.common/.k1/.k2/.backend/.cli`) are not published.
+
+## Use without the compiler plugin (optional)
+
+You can use `slf4j-ktx-core` as a lightweight runtime-only logging library without
+applying the Gradle plugin:
+
+```kotlin
+plugins {
+    kotlin("jvm") version "1.9.25"
+    // no id("io.github.harryjhin.slf4j-ktx")
+}
+dependencies {
+    implementation("io.github.harryjhin:slf4j-ktx-core:0.1.0")
+}
+```
+
+Call `info { }` / `error(e) { }` etc. as usual. Each call goes through
+`LoggerFactory.getLogger(T::class.java)` with SLF4J's built-in cache — comparable
+per-call cost to kotlin-logging. The `@Slf4j` annotation has no effect in this mode.
+
+Enabling the plugin adds one thing on top: each call site at a triggered class
+becomes a direct static-field read (`Companion.log.info(...)`) with no per-call
+cache lookup.
+
+## Design note: why a compiler plugin?
+
+Because the runtime extensions ship with full default bodies, `slf4j-ktx-core` works
+standalone. The compiler plugin is deliberately positioned as an *optional
+optimization*, not a correctness requirement.
+
+**The plugin exists for a larger long-term surface**, parked behind a limitation
+outside this project's control: IntelliJ IDEA does not currently give third-party
+compiler plugins a first-class IDE integration path. When that changes — a stable
+API for IDE-facing synthetic declarations, or inclusion of the plugin in Kotlin
+IDE plugin's bundled list — the plugin can extend to cover features the
+runtime-only path cannot, such as:
+
+- IDE-visible synthetic `log: Logger` on `Companion`, so parameterized-message
+  `log.info("{}", x)` and `log.isDebugEnabled` guards resolve without red squiggles
+- Diagnostic-level enforcement surfaced as live IDE warnings
+- Future work: automatic MDC propagation, structured-logging builders, marker-aware
+  call-site rewrites
+
+Until then, the plugin stays minimal: Companion `log` synthesis + call-site IR
+rewrite. Both are invisible to the IDE by design; neither blocks correct compilation.
+
+Background:
+- [Kotlin Discussions — FIR plugin and IDE integration](https://discuss.kotlinlang.org/t/fir-plugin-and-ide-integration/29384)
+- [KT-23696](https://youtrack.jetbrains.com/issue/KT-23696)
+- [Kotlin External FIR Support (KEFS)](https://plugins.jetbrains.com/plugin/26480-kotlin-external-fir-support) — community bridge offering partial third-party IDE support today
 
 ## Compatibility
 
@@ -193,9 +246,9 @@ Internal compiler modules (`slf4j-ktx.common/.k1/.k2/.backend/.cli`) are not pub
 |---|---|
 | Kotlin | 1.9.25 (this branch) |
 | Plugin version | = Kotlin version |
-| `slf4j-ktx-core` | Independent cadence; `0.1.0+` |
-| Java | 8+ (runtime), 17+ (build) |
-| SLF4J | 1.7.36+ |
+| `slf4j-ktx-core` | 0.1.0+ (independent cadence) |
+| Java | 8+ (runtime target), 17+ (build) |
+| SLF4J | 1.7.36+ (compatible with 2.0) |
 | Gradle | 8.0+ |
 
 ## Releasing

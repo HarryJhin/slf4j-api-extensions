@@ -1,55 +1,33 @@
 # Changelog
 
-All notable changes are documented here. This project follows Kotlin compiler plugin versioning (plugin version ≡ Kotlin version) with the runtime library on its own cadence.
+Release history for the `io.github.harryjhin:slf4j-ktx-core` artifact, versioned on its own cadence (`coreVersion` in `gradle.properties`) — independent of the Kotlin compiler version the repo is paired with.
 
-## [1.9.25] — Unreleased
+> Compiler-plugin artifacts (`slf4j-ktx-compiler-plugin-embeddable`, `slf4j-ktx-gradle-plugin`, `slf4j-ktx-spring-gradle-plugin`) are **SNAPSHOT-only**; they do not appear in this log. Rationale and workflow: [RELEASING.md](RELEASING.md).
 
-**Breaking rewrite** — project renamed to `slf4j-ktx`. Old `slf4j-extensions` artifacts are retired. Not wire-compatible with pre-rewrite releases.
+The format is based on [Keep a Changelog](https://keepachangelog.com/); this project adheres to [Semantic Versioning](https://semver.org/).
+
+## [0.1.0] — Unreleased
+
+Initial public release.
 
 ### Added
 
-- `@io.github.harryjhin.slf4j.ktx.Slf4j` trigger annotation — opt-in annotation-based triggering (replaces `allClasses = true` default).
-- Companion-centric synthesis — plugin injects `log` + `trace/debug/info/warn/error × 2` into the triggered class's `Companion` (or into the `object` itself for `@Slf4j object Foo`). User class body, supertypes, and constructors are never touched.
-- 1-hop meta-annotation support — `@Slf4j` on a user annotation makes that annotation itself a trigger.
-- `slf4j-ktx-spring-gradle-plugin` — Spring integration. Auto-applies the main plugin and adds the six stereotype FQNs (`@Component/@Controller/@Service/@Repository/@RestController/@ControllerAdvice`) as triggers.
-- K2 FIR frontend — K1 and K2 both register unconditionally; the compiler picks the active frontend via `languageVersion`.
-- Two-axis runtime compatibility diagnostics — `CORE_MISSING` / `CORE_TOO_OLD` / `COMPILER_TOO_OLD` reported via K1 `DeclarationChecker` and K2 `FirClassChecker`. (Version-reader manifest parsing is wired; deep diagnostics test coverage lands in a follow-up.)
-- Independent runtime versioning — `slf4j-ktx-core` carries `coreVersion` (starts `0.1.0-SNAPSHOT`) separate from the compiler-plugin/Kotlin-paired `version`.
+- `@io.github.harryjhin.slf4j.ktx.Slf4j` trigger annotation. Opt-in marker consumed by the optional compiler plugin; a plain runtime annotation otherwise.
+- Top-level inline extensions `T.trace / T.debug / T.info / T.warn / T.error` with message-only `(() -> String)` and throwable-aware `(Throwable, () -> String)` overloads. Each is level-gated and evaluates the message lambda only when the level is enabled. Default body resolves the logger through SLF4J's `LoggerFactory.getLogger(T::class.java)` cache.
+- `Logger.<level>(Marker, …)` inline extensions — Marker-qualified variants with the same lazy-lambda + level-gate shape.
+- `withMDC(vararg Pair<String, String>, block)` and `withMDC(Map<String, String>, block)` — scoped MDC mutation that restores prior values on exit (including on exception).
 
-### Changed
+### JAR manifest
 
-- **Gradle plugin id**: `io.github.harryjhin.slf4j-extensions` → `io.github.harryjhin.slf4j-ktx`.
-- **Runtime artifact**: `io.github.harryjhin:slf4j-extensions-runtime` → `io.github.harryjhin:slf4j-ktx-core`.
-- **DSL surface**: single-option DSL. `propertyName`, `allClasses`, `packages(...)`, `excludeAnnotation(...)` all removed.
-  ```kotlin
-  // Before (v1):
-  slf4jExtensions {
-      propertyName = "log"
-      allClasses = true
-      annotation("com.example.Logged")
-      packages("com.example.service")
-  }
-  // After:
-  slf4jKtx {
-      annotation("com.example.Logged")  // only user extension point
-  }
-  ```
-- **Call-site scope**: logging calls now resolve to Companion members (or the `object` itself), not to instance members. Practical effect on `class Foo` is identical — Kotlin's scope rules make Companion members visible unqualified inside the enclosing class body. Nested classes, subclasses, and top-level functions must carry their own `@Slf4j` (Companion members do not inherit or leak to unrelated scopes).
-- **Trigger semantics**: opt-in by annotation (no implicit whole-codebase coverage). Classes without `@Slf4j` (or a user trigger) are untouched.
-- **Module layout**: nine new modules under `slf4j-ktx.*` / `slf4j-ktx-*`. See README Modules section.
+The published JAR stamps two attributes consumed by the optional compiler plugin's version reader:
 
-### Removed
+- `Implementation-Version` — the `coreVersion` of this release.
+- `Require-Kotlin-Version` — the minimum Kotlin compiler version this release requires.
 
-- `slf4j-extensions-*` eight legacy modules (tracked for removal in a follow-up step while both sets briefly coexist during the migration).
-- Runtime `trace { }` / `info { }` etc. inline extensions on `Logger` — these are now supplied as Companion members by the compiler plugin, not as runtime library functions. `Marker`-qualified overloads and `withMDC { }` remain in the runtime (`MarkerExtensions.kt`, `MdcExtensions.kt`).
+### Compatibility
 
-### Migration
-
-| Old | New |
+| Requirement | Version |
 |---|---|
-| `id("io.github.harryjhin.slf4j-extensions") version "1.9.25"` | `id("io.github.harryjhin.slf4j-ktx") version "1.9.25"` |
-| `implementation("io.github.harryjhin:slf4j-extensions-runtime:1.9.25")` | `implementation("io.github.harryjhin:slf4j-ktx-core:0.1.0")` |
-| `slf4jExtensions { allClasses = true }` (implicit opt-in) | Add `@Slf4j` to each class that needs logging |
-| `slf4jExtensions { annotation("…") }` (filter) | `slf4jKtx { annotation("…") }` (trigger) |
-| `slf4jExtensions { packages("…") }` | Add `@Slf4j` (or a custom meta-trigger annotation) to the relevant classes |
-| Spring stereotypes auto-detected via package filter | `id("io.github.harryjhin.slf4j-ktx.spring")` |
+| Kotlin runtime target | 1.9.25+ |
+| Java | 8+ |
+| SLF4J | 1.7.36+ (compatible with 2.0) |
