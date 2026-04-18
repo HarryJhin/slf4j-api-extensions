@@ -1,30 +1,117 @@
 # slf4j-ktx-spring-gradle-plugin
 
-**Spring 통합 Gradle 플러그인** — 메인 플러그인을 자동 적용하고 Spring 스테레오타입 어노테이션(`@Component`, `@Controller`, `@Service`, `@Repository`, `@RestController`, `@ControllerAdvice`) FQN을 트리거 목록에 **하드코드로 추가**한다.
+Optional Gradle plugin adding Spring stereotype triggers on top of [`slf4j-ktx-gradle-plugin`](../slf4j-ktx-gradle-plugin). **Preview — SNAPSHOT-only.**
 
-## 존재 이유
+## What it does
 
-메인 플러그인이 "Spring을 알지 않는다"는 것이 설계 원칙이다. Spring 사용자 편의를 위해 `@Service` 등을 기본 트리거에 포함시키고 싶지만, 이걸 메인 플러그인에 박으면 비-Spring 프로젝트가 Spring 어노테이션 FQN을 설정 리스트에 달고 다녀야 한다. 관심사 분리 위반.
+1. Auto-applies `slf4j-ktx-gradle-plugin`.
+2. Registers six Spring stereotype FQNs as additional triggers, so Spring-managed classes participate in the IR call-site rewriter without needing a separate `@Slf4j` annotation.
 
-**kotlin-spring이 kotlin-allopen에게 하는 것과 동일한 패턴**: 별도 플러그인이 메인 플러그인을 `target.plugins.apply(…)`로 자동 적용하고, Spring 특화 어노테이션 목록을 `SubpluginOption`으로 contribute한다.
+The compiler plugin itself is registered exactly once — by the main plugin. This plugin's only effect is to mutate the shared `Slf4jKtxGradleExtension.myAnnotations` list; Kotlin's `kotlin-spring` + `kotlin-allopen` pairing uses the same approach.
 
-사용자는 `id("io.github.harryjhin.slf4j-ktx.spring")` 한 줄만 적으면 된다 — 메인 플러그인은 자동으로 걸린다.
+## Applying
 
-## 주요 타입 (Step 11에서 구현)
+### settings.gradle.kts
 
-- `Slf4jKtxSpringGradleSubplugin` — `KotlinCompilerPluginSupportPlugin`
-  - `apply(target)` → `target.plugins.apply(Slf4jKtxGradleSubplugin::class.java)` (메인 자동 적용)
-  - `getCompilerPluginId()` → 메인 플러그인 id 반환 (동일 컴파일러 플러그인을 재사용)
-  - `getPluginArtifact()` → 메인 artifact 반환 (embeddable JAR)
-  - `applyToCompilation()` → `SPRING_ANNOTATIONS` 6개를 `SubpluginOption("annotation", fqn)`로 매핑
-- `SPRING_ANNOTATIONS` — `Component`, `Controller`, `Service`, `Repository`, `RestController`, `ControllerAdvice` FQN 리스트
+```kotlin
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven("https://central.sonatype.com/repository/maven-snapshots/") {
+            content {
+                includeModule(
+                    "io.github.harryjhin.slf4j-ktx.spring",
+                    "io.github.harryjhin.slf4j-ktx.spring.gradle.plugin"
+                )
+                includeModule(
+                    "io.github.harryjhin.slf4j-ktx",
+                    "io.github.harryjhin.slf4j-ktx.gradle.plugin"
+                )
+                includeModule("io.github.harryjhin", "slf4j-ktx-spring-gradle-plugin")
+                includeModule("io.github.harryjhin", "slf4j-ktx-gradle-plugin")
+            }
+        }
+    }
+}
 
-## 의존
+dependencyResolutionManagement {
+    repositories {
+        mavenCentral()
+        maven("https://central.sonatype.com/repository/maven-snapshots/") {
+            content {
+                includeModule("io.github.harryjhin", "slf4j-ktx-compiler-plugin-embeddable")
+            }
+        }
+    }
+}
+```
 
-- `compileOnly`: `kotlin-gradle-plugin-api`, `kotlin-gradle-plugin`
-- `implementation(project(":slf4j-ktx-gradle-plugin"))` — 메인 플러그인 클래스 참조용
+### build.gradle.kts
 
-## 참조
+```kotlin
+plugins {
+    kotlin("jvm") version "1.9.25"
+    id("io.github.harryjhin.slf4j-ktx.spring") version "1.9.25-SNAPSHOT"
+}
 
-- SPEC §4.1, §5.10, §6.8
-- 대응: `kotlin-spring` Gradle 플러그인 (kotlinlang.org/docs/all-open-plugin.html 에 동작 문서화). sparse checkout 외부라 파일 직접 확인은 PLAN Step 1에서 생략, 동작은 문서 기반
+dependencies {
+    implementation("io.github.harryjhin:slf4j-ktx-core:0.1.0")
+}
+```
+
+Applying this plugin also applies `slf4j-ktx-gradle-plugin` — no need to list both.
+
+## Triggers registered
+
+- `org.springframework.stereotype.Component`
+- `org.springframework.stereotype.Controller`
+- `org.springframework.stereotype.Service`
+- `org.springframework.stereotype.Repository`
+- `org.springframework.web.bind.annotation.RestController`
+- `org.springframework.web.bind.annotation.ControllerAdvice`
+
+These compose with `@Slf4j` and with any FQNs added via `slf4jKtx { annotation("…") }`.
+
+## Usage
+
+```kotlin
+import io.github.harryjhin.slf4j.ktx.*
+import org.springframework.stereotype.Service
+
+@Service
+class OrderService {
+    fun process() {
+        info { "processing" }
+    }
+}
+```
+
+No `@Slf4j` needed — `@Service` already qualifies as a trigger.
+
+## Not covered by the default list
+
+Several Spring-managed classes carry the core `@Component` stereotype at two or more meta-annotation hops rather than directly:
+
+- `@Configuration` → `@Component`
+- `@AutoConfiguration` → `@Configuration` → `@Component`
+- `@SpringBootApplication` → `@SpringBootConfiguration` → `@Configuration` → `@Component`
+- `@ConfigurationProperties` (standalone — not a stereotype at all)
+
+The plugin's meta-annotation predicate is **1-hop only**, so these chains are not auto-registered. Register explicitly when needed:
+
+```kotlin
+slf4jKtx {
+    annotation("org.springframework.context.annotation.Configuration")
+    annotation("org.springframework.boot.autoconfigure.AutoConfiguration")
+    annotation("org.springframework.boot.autoconfigure.SpringBootApplication")
+    annotation("org.springframework.boot.context.properties.ConfigurationProperties")
+}
+```
+
+## IDE limitations
+
+Same constraints as the main plugin — see [slf4j-ktx-gradle-plugin/README.md](../slf4j-ktx-gradle-plugin/README.md#ide-limitations).
+
+## License
+
+[MIT License](../LICENSE)
